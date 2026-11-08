@@ -116,6 +116,15 @@ The codebase adheres to the following production engineering standards:
 - **Unit Tests:** `tests/test_governance.py` - 14 unit tests covering the full lifecycle progression, invalid state transition rejections, unvalidated approval blocking, substantive notes enforcement, post-approval tamper detection, fingerprint mismatch guards, duplicate publication prevention, immutable audit history, and multi-format exports.
 - **Database Tables:** `governance_records`, `governance_versions`, `governance_audit`, `governance_publications` in `data/antara_knowledge.db`.
 
+### Real-Time Internet Intelligence (Part A)
+- **Engine Core:** `engine/search.py` - Pluggable live web retrieval architecture with `SearchProvider` ABC, `MockSearchProvider`, `OpenAIWebSearchProvider`, source credibility scoring, URL deduplication, semantic conflict detection, publication vs. retrieval date separation, robots.txt compliance, SSRF protection, and prompt injection sanitization.
+- **CLI Interface:** `engine/search_cli.py` - Command-line tools for live and mock web searches (`search`), page text extraction (`fetch`), and robots policy inspection (`check-robots`).
+- **Unit Tests:** `tests/test_search.py` - 14 unit tests covering providers, deduplication, conflict analysis, dates, SSRF blocking, injection defusing, rate limits, timeouts, and caching.
+
+### Unified Intelligence Engine & 12-Dimensional Response System (Layer 1 Core)
+- **Engine Core:** `engine/unified_engine.py` & `engine/unified_response.py` - Orchestrates the entire Layer 1 pipeline: intelligent subsystem routing (`classify_subsystems`), verified Gītā retrieval, approved research evidence, live web search, AI reasoning, Module 4 validation gating, Module 5 governance registration, and 12-dimensional `UnifiedResponse` generation.
+- **Unit Tests:** `tests/test_unified_orchestrator.py` & `tests/test_live_smoke.py` - 14 comprehensive integration tests covering all Part F scenarios offline, plus 3 on-demand live internet & API smoke tests.
+
 ---
 
 ## 4. Module 2: Knowledge Intelligence CLI & Workflow
@@ -221,7 +230,7 @@ python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about ac
 # 2. Run with an ordinary non-philosophical inquiry (retrieval safely bypassed)
 python app.py "Why do people procrastinate even when they know what matters?"
 
-# 3. Run the full 104-test suite covering all modules & the retrieval bridge
+# 3. Run the full 135-test Layer 1 suite (132 passing, 3 skipped offline)
 python -m unittest discover -s tests -v
 ```
 
@@ -612,7 +621,131 @@ python -m engine.governance_cli audit --report-id "reason_20261108_052517_bae379
 
 ---
 
-## 10. Controlled JSON Import Schema
+## 10. Real-Time Internet Intelligence (Part A) CLI & Workflow
+
+### Overview & Security Mandate
+The Real-Time Internet Intelligence engine searches the live internet, retrieves current information, classifies source credibility, detects semantic conflicts across results, and separates document publication dates from retrieval timestamps.
+
+> **Security Mandate — Untrusted External Web Data:**
+> All retrieved web content is treated strictly as **untrusted external data**, never as system instructions.
+> - **Prompt Injection Defense:** Known jailbreak phrases (`Ignore previous instructions`, `SYSTEM PROMPT:`, etc.) are sanitized, system tags are defused, and content is wrapped in strict isolation tags.
+> - **SSRF Protection:** `is_safe_url()` blocks loopback (`127.0.0.1`), private RFC1918 subnets, AWS/cloud metadata (`169.254.169.254`), and prohibited protocols.
+> - **Robots.txt & Fair Use:** Respects `robots.txt` crawling directives via `RobotsPolicyChecker` and limits extracts to short research snippets.
+
+### Credibility Tiers
+1. `official`: Government portals (.gov, .gov.in, .mil) and international agencies (WHO, UN).
+2. `academic`: Peer-reviewed journals and preprint servers (.edu, nature.com, arxiv.org, doi.org).
+3. `credible_news`: Verified global journalistic institutions (Reuters, AP, BBC, The Hindu).
+4. `general`: Open web sources with baseline credibility weighting (0.50).
+
+### PowerShell Command Examples
+
+```powershell
+# 1. Execute deterministic offline search with MockSearchProvider
+python -m engine.search_cli search "recent cognitive research on procrastination" --mock
+
+# 2. Output full JSON envelope with credibility scores & hashes
+python -m engine.search_cli search "quantum computing 2026" --mock --json
+
+# 3. Safely fetch and sanitize a webpage (respecting SSRF and robots.txt)
+python -m engine.search_cli fetch "https://en.wikipedia.org/wiki/Bhagavad_Gita"
+
+# 4. Check whether robots.txt permits crawling a target URL
+python -m engine.search_cli check-robots "https://nature.com/articles"
+```
+
+---
+
+## 11. Unified Intelligence Engine & 12-Dimensional Response System
+
+### Layer 1 Architecture Overview
+The Unified Intelligence Engine integrates all six Layer 1 subsystems into a single, cohesive pair programming and research pipeline:
+1. **Intelligent Subsystem Routing:** Selectively invokes traditional Gītā knowledge, empirical research, and live internet search instead of indiscriminately firing every subsystem.
+2. **Anti-Hallucination Fact-Checking Gate:** Every output is deterministically validated before entering human review.
+3. **Module 5 Human Governance:** Substantive human approval ($\ge 20$ chars) and cryptographic fingerprint protection (`approved_hash`).
+4. **12-Dimensional Unified Response Schema:** Standardized machine-readable envelope.
+
+```
+[User Inquiry]
+       │
+       ▼
+[Subsystem Selection Router: classify_subsystems()]
+  ├── Traditional Knowledge (Gītā)? ──► [Knowledge Retrieval Bridge]
+  ├── Empirical Scientific Research? ─► [Research Intelligence Layer]
+  └── Real-Time Live Web Search? ────► [Real-Time Search Manager]
+       │
+       ▼
+[Context Builder] (Sanitizes & Bounds Provenance)
+       │
+       ▼
+[AI Reasoning Engine] (OpenAI / MockLLMProvider)
+       │
+       ▼
+[Module 4 Fact-Checking Audit]
+       │
+  ┌────┴────────────────────────┐
+  ▼                             ▼
+[Passed Verified]     [Failed / Compromised]
+  │                             │
+  ▼                             ▼
+Status: pending_review  Status: validation_failed (Approval Blocked)
+  │
+  ▼
+[Module 5 Human Governance Review & Authorization]
+  │
+  ▼
+[Publishing Pipeline: LocalFilePublisher] (JSON + Markdown)
+```
+
+### The 12 Dimensions of `UnifiedResponse`
+1. `direct_answer`: Concise 2-3 sentence executive answer.
+2. `detailed_explanation`: Deep comparative epistemological analysis.
+3. `traditional_perspective`: Verified Gītā principles and verse citations.
+4. `scientific_perspective`: Modern empirical and cognitive paradigms.
+5. `current_developments`: Live web intelligence, recent studies, and publication dates.
+6. `supporting_evidence`: Consolidated supporting findings across scripture, science, web.
+7. `contradicting_evidence`: Conflicting findings, boundary conditions, and semantic disagreements.
+8. `source_citations`: Explicit citations with URLs, publication dates, and retrieval timestamps.
+9. `uncertainty_and_limitations`: Epistemic boundaries and identified research gaps.
+10. `fact_checking_results`: Deterministic Module 4 anti-hallucination validation audit.
+11. `human_review_status`: Reviewer identity, review notes, approval hash, and audit trail.
+12. `report_id` and ISO 8601 UTC provenance timestamps.
+
+### Running the Complete Layer 1 Pipeline
+
+```powershell
+# 1. Run full 12-dimensional unified response generation
+python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about action and procrastination?" --unified --mock-llm --mock-web
+
+# 2. Run the full 135-test Layer 1 suite offline
+python -m unittest discover -s tests -v
+
+# 3. Run the 14 Part F integration tests
+python -m unittest tests/test_unified_orchestrator.py -v
+```
+
+---
+
+## 12. Separately Invoked Live Smoke Tests
+
+ANTARĀ provides isolated live network and live OpenAI API smoke tests in `tests/test_live_smoke.py`. These tests are skipped by default during offline test discovery to preserve hermetic execution.
+
+To execute live smoke tests on-demand in PowerShell:
+
+```powershell
+# 1. Enable live testing environment variable
+$env:ANTARA_ENABLE_LIVE_TESTS = "1"
+
+# 2. (Optional) Set your OpenAI API key for live LLM smoke test
+$env:OPENAI_API_KEY = "sk-..."
+
+# 3. Run the live smoke tests
+python -m unittest tests/test_live_smoke.py -v
+```
+
+---
+
+## 13. Controlled JSON Import Schema
 
 The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two formats:
 
@@ -651,7 +784,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 11. Mechanical vs. Human Verification
+## 14. Mechanical vs. Human Verification
 
 | Dimension | Mechanical Verification (Application Level) | Human Verification (Scholarly & Domain Level) |
 | :--- | :--- | :--- |
@@ -662,9 +795,11 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 12. Next Implementation Modules
+## 15. Next Implementation Layers (Layers 2–5 Roadmap)
 
-1. **Multi-Channel Social & Web Distribution Plugins:** Substack, Medium, X/Twitter, and WordPress publisher adapters built on `PublishingProvider`.
-2. **Production Monitoring & Observability Dashboards:** Real-time metrics for claim verification, audit trails, and human review SLAs.
+1. **Layer 2 (Multilingual Knowledge & Ontology Expansion):** Expanded Sanskrit text corpus, commentary comparison engine (Shankara, Ramanuja, Madhva), and philosophical ontology mapping.
+2. **Layer 3 (Multi-Channel Web & Social Distribution):** Substack, Medium, X/Twitter, and WordPress publisher adapters built on `PublishingProvider`.
+3. **Layer 4 (Production Observability & SLA Monitoring):** Real-time metrics for claim verification, latency, human review SLAs, and security anomaly detection.
+4. **Layer 5 (Decentralized Provenance & Trust):** Cryptographic attestation anchoring and distributed provenance graphs.
 
 

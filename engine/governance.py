@@ -134,7 +134,14 @@ class GovernanceRecord:
 
     def to_dict(self) -> dict[str, Any]:
         """Convert record to dictionary."""
-        return asdict(self)
+        d = asdict(self)
+        d["status"] = self.current_state
+        return d
+
+    @property
+    def status(self) -> str:
+        """Convenience property for current lifecycle state."""
+        return self.current_state
 
 
 @dataclass(frozen=True)

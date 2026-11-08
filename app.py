@@ -1,6 +1,7 @@
 """ANTARĀ Intelligence Engine - Command-Line Interface.
 
-Entry point for generating human-supervised intelligence briefs from questions.
+Entry point for generating human-supervised intelligence briefs and unified Layer 1
+intelligence responses from user questions.
 Ensures UTF-8 encoding compliance and structured output persistence.
 """
 
@@ -8,10 +9,12 @@ import argparse
 import json
 import logging
 import os
-import sys
 from pathlib import Path
+import sys
 
 from engine.orchestrator import create_brief
+from engine.search import MockSearchProvider, OpenAIWebSearchProvider, SearchManager
+from engine.unified_response import build_unified_response
 
 logger = logging.getLogger("antara.cli")
 
@@ -45,7 +48,7 @@ def main() -> None:
     configure_utf8_output()
     configure_logging()
 
-    parser = argparse.ArgumentParser(description="ANTARĀ Intelligence Engine v1")
+    parser = argparse.ArgumentParser(description="ANTARĀ Intelligence Engine Layer 1")
     parser.add_argument("question", help="Question to turn into an intelligence brief")
     parser.add_argument(
         "--claims-file",
@@ -57,9 +60,24 @@ def main() -> None:
         help="Execute AI reasoning synthesis using authenticated primary sources and approved research",
     )
     parser.add_argument(
+        "--unified",
+        action="store_true",
+        help="Generate and display comprehensive 12-dimensional Layer 1 Unified Response",
+    )
+    parser.add_argument(
         "--mock-llm",
         action="store_true",
         help="Force MockLLMProvider for offline deterministic reasoning without network",
+    )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Enable live internet search intelligence for current information",
+    )
+    parser.add_argument(
+        "--mock-web",
+        action="store_true",
+        help="Force MockSearchProvider for offline deterministic web retrieval without network",
     )
     args = parser.parse_args()
 
@@ -72,21 +90,40 @@ def main() -> None:
         else:
             print(f"Warning: Claims file '{c_path}' not found.", file=sys.stderr)
 
-    brief = create_brief(args.question, claims=claims_data)
+    # Initialize search manager if web retrieval requested or indicated
+    search_provider = None
+    if args.mock_web:
+        search_provider = MockSearchProvider()
+    elif args.web:
+        search_provider = OpenAIWebSearchProvider()
+
+    search_mgr = SearchManager(provider=search_provider) if search_provider else None
+
+    brief = create_brief(
+        args.question,
+        claims=claims_data,
+        search_mgr=search_mgr,
+        force_web=True if args.web or args.mock_web else None,
+    )
+
     output_dir = Path("outputs")
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / "latest_brief.json"
     output_path.write_text(json.dumps(brief.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
 
-    print("ANTARĀ Intelligence Engine v1")
-    print("=" * 34)
+    print("ANTARĀ Intelligence Engine — Layer 1")
+    print("=" * 45)
     print(f"Question: {brief.question}")
-    print(f"Topic: {brief.topic}")
-    print(f"Status: {brief.status}")
-    print(f"Human review required: {brief.human_review_required}")
-    print("\nInitial objectives:")
-    for objective in brief.objectives:
-        print(f"- {objective}")
+    print(f"Topic:    {brief.topic}")
+    print(f"Status:   {brief.status} (Human Review Required: {brief.human_review_required})")
+
+    # Subsystem Routing Summary
+    s_plan = brief.subsystem_plan
+    if s_plan:
+        print("\nIntelligent Subsystem Routing Plan:")
+        print(f"  ├─ Traditional Knowledge (Gītā): {'ENABLED' if s_plan.get('needs_traditional_knowledge') else 'BYPASS'}")
+        print(f"  ├─ Scientific Research:         {'ENABLED' if s_plan.get('needs_scientific_research') else 'BYPASS'}")
+        print(f"  └─ Real-Time Web Intelligence:  {'ENABLED' if s_plan.get('needs_live_internet') else 'BYPASS'}")
 
     records = brief.knowledge_context.get("records", [])
     if records:
@@ -119,6 +156,23 @@ def main() -> None:
             for gap in r_ctx["evidence_gaps"]:
                 print(f"    * {gap}")
 
+    w_ctx = brief.web_context
+    if w_ctx and w_ctx.get("total_results", 0) > 0:
+        print(f"\nReal-Time Web Intelligence ({w_ctx.get('provider')}):")
+        for res in w_ctx.get("results", []):
+            pub_date = res.get("published_date") or "Unknown"
+            print(f"  - \"{res.get('title')}\"")
+            print(f"    URL:       {res.get('url')}")
+            print(f"    Domain:    {res.get('source_domain')} [{res.get('credibility_tier')}]")
+            print(f"    Published: {pub_date} | Retrieved: {res.get('retrieved_at_utc')}")
+            print(f"    Snippet:   {res.get('snippet')}")
+        if w_ctx.get("conflicts_detected"):
+            print("  [!] DETECTED WEB CONFLICTS / DISAGREEMENTS:")
+            for conf in w_ctx["conflicts_detected"]:
+                print(f"    * {conf.get('note')}")
+    elif w_ctx and w_ctx.get("status") in ("unavailable", "rate_limited", "error"):
+        print(f"\nReal-Time Web Intelligence: {w_ctx.get('disclosure_note')}")
+
     val_ctx = brief.validation_context
     if val_ctx and val_ctx.get("total_claims", 0) > 0:
         print("\nAnti-Hallucination & Fact-Checking Report:")
@@ -135,7 +189,8 @@ def main() -> None:
         val_path.write_text(json.dumps(val_ctx, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"  Saved validation report to: {val_path}")
 
-    if args.reason:
+    # Reasoning and Unified Response
+    if args.reason or args.unified:
         from engine.llm_provider import MockLLMProvider
         from engine.openai_provider import OpenAIProvider
         from engine.reasoning import ReasoningEngine
@@ -154,18 +209,33 @@ def main() -> None:
         reason_path = output_dir / "latest_reasoning_report.json"
         reason_path.write_text(analysis.to_json(), encoding="utf-8")
 
-        print("\n" + "=" * 50)
+        print("\n" + "=" * 55)
         print("ANTARĀ AI REASONING SYNTHESIS")
         print(f"Report ID: {analysis.report_id}")
         print(f"Status:    [{analysis.status.upper()}] (Human Review Required: {analysis.human_review_required})")
         print(f"\nExecutive Summary:\n  {analysis.executive_summary}")
         print(f"\nSynthesized Insight:\n  {analysis.original_synthesized_insight}")
         print(f"\nSaved reasoning report to: {reason_path}")
-        print("=" * 50)
+
+        if args.unified:
+            unified = build_unified_response(brief, analysis)
+            unified_path = output_dir / "latest_unified_response.json"
+            unified_path.write_text(unified.to_json(), encoding="utf-8")
+
+            print("\n" + "=" * 55)
+            print("LAYER 1 UNIFIED RESPONSE SUMMARY")
+            print(f"Direct Answer:           {unified.direct_answer}")
+            print(f"Traditional Perspective: {unified.traditional_perspective.get('framework')[:80]}...")
+            print(f"Scientific Perspective:  {unified.scientific_perspective.get('framework')[:80]}...")
+            print(f"Current Web Sources:     {len(unified.current_developments.get('sources', []))} source(s)")
+            print(f"Total Citations:         {len(unified.source_citations)} citation(s) across scripture, research, web")
+            print(f"Fact-Check Status:       {unified.fact_checking_results.get('overall_status', 'N/A')}")
+            print(f"Governance Status:       [{unified.governance_status.upper()}] (Human Review Required)")
+            print(f"\nSaved complete 12-D unified response to: {unified_path}")
+        print("=" * 55)
 
     print(f"\nSaved brief to: {output_path}")
 
 
 if __name__ == "__main__":
     main()
-

@@ -1,12 +1,13 @@
 """ANTARĀ Intelligence Engine - Orchestration & Validation Module.
 
-This module provides question validation, initial topic classification, and
-structured brief generation for the human-supervised intelligence workflow.
+This module provides question validation, initial topic classification, intelligent
+subsystem routing, and structured brief generation for the human-supervised intelligence workflow.
 """
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import logging
+import re
 from typing import Any
 
 # Structured logger for orchestration events
@@ -20,6 +21,26 @@ OBJECTIVES: tuple[str, ...] = (
     "Propose a practical experiment only when supported by evidence.",
 )
 
+TRADITIONAL_KEYWORDS = frozenset({
+    "bhagavad", "gita", "gītā", "dharma", "karma", "krishna", "arjuna",
+    "yoga", "vedanta", "upanishad", "sanskrit", "verse", "shloka",
+    "chapter", "samkhya", "moksha", "nishkama", "niṣkāma", "atman", "brahman",
+})
+
+RESEARCH_KEYWORDS = frozenset({
+    "study", "studies", "research", "science", "scientific", "psychology",
+    "psychological", "neuroscience", "empirical", "experiment", "cognitive",
+    "delay discounting", "procrastination", "dopamine", "prefrontal",
+    "behavior", "meta-analysis", "hypothesis", "clinical", "sample size",
+})
+
+LIVE_INTERNET_KEYWORDS = frozenset({
+    "current", "currently", "latest", "recent", "recently", "today", "now",
+    "2024", "2025", "2026", "newest", "trend", "trends", "update", "updates",
+    "news", "ongoing", "policy", "breakthrough", "breakthroughs", "market",
+    "live", "real-time", "developments",
+})
+
 
 class AntaraError(Exception):
     """Base exception for all ANTARĀ Intelligence Engine domain errors."""
@@ -31,6 +52,31 @@ class ValidationError(AntaraError, ValueError):
 
 class QuestionTypeError(AntaraError, TypeError):
     """Raised when question input is not of expected string type."""
+
+
+@dataclass(frozen=True)
+class SubsystemPlan:
+    """Intelligent subsystem execution plan determining which engines to invoke.
+
+    Attributes:
+        question: Normalized query string.
+        needs_traditional_knowledge: Whether Bhagavad Gītā knowledge is indicated.
+        needs_scientific_research: Whether empirical scientific research is indicated.
+        needs_live_internet: Whether real-time web retrieval is indicated.
+        needs_reasoning: Whether AI comparative reasoning synthesis is indicated.
+        selection_rationale: Detailed explanation of routing decisions.
+    """
+
+    question: str
+    needs_traditional_knowledge: bool
+    needs_scientific_research: bool
+    needs_live_internet: bool
+    needs_reasoning: bool
+    selection_rationale: dict[str, str]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert plan to dictionary."""
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -47,6 +93,9 @@ class IntelligenceBrief:
         created_at_utc: ISO 8601 UTC timestamp of brief creation.
         knowledge_context: Verified primary source knowledge attached via retrieval bridge.
         research_context: Modern scientific & empirical research evidence attached via Module 3.
+        validation_context: Module 4 Anti-Hallucination & Fact-Checking report context.
+        web_context: Real-time web intelligence and search context attached via Part A.
+        subsystem_plan: Intelligent routing plan recording which subsystems were invoked.
     """
 
     question: str
@@ -59,6 +108,8 @@ class IntelligenceBrief:
     knowledge_context: dict[str, Any] = field(default_factory=dict)
     research_context: dict[str, Any] = field(default_factory=dict)
     validation_context: dict[str, Any] = field(default_factory=dict)
+    web_context: dict[str, Any] = field(default_factory=dict)
+    subsystem_plan: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert intelligence brief to a JSON-serializable dictionary."""
@@ -111,7 +162,7 @@ def classify_topic(question: str) -> str:
     categories: dict[str, tuple[str, ...]] = {
         "human_behavior": ("procrastination", "procrastinate", "habit", "emotion", "fear", "motivation"),
         "philosophy": ("meaning", "purpose", "dharma", "ethics", "wisdom", "bhagavad", "gita"),
-        "technology": ("ai", "software", "computer", "algorithm", "technology", "python"),
+        "technology": ("ai", "software", "computer", "algorithm", "technology", "python", "quantum"),
         "productivity": ("focus", "time management", "goal", "work", "productivity"),
     }
     for topic, keywords in categories.items():
@@ -122,6 +173,66 @@ def classify_topic(question: str) -> str:
     return "general"
 
 
+def classify_subsystems(question: str) -> SubsystemPlan:
+    """Intelligently determine which subsystems should be invoked for a given question.
+
+    Evaluates whether the question requires traditional Gītā knowledge, empirical
+    scientific research, real-time web intelligence, and AI reasoning.
+
+    Args:
+        question: Normalized user question string.
+
+    Returns:
+        SubsystemPlan instance detailing active subsystems and routing rationales.
+    """
+    text = question.casefold()
+    tokens = set(re.findall(r"\b[\w\-]+\b", text))
+
+    # 1. Traditional Knowledge
+    has_gita_verse_ref = bool(re.search(r"\b(chapter\s+\d+|\d+\s*[\.:]\s*\d+|bg\s*\d+)\b", text))
+    has_traditional_kw = bool(tokens & TRADITIONAL_KEYWORDS) or any(kw in text for kw in ("bhagavad gita", "bhagavad gītā"))
+    needs_traditional = has_traditional_kw or has_gita_verse_ref or (classify_topic(question) == "philosophy" and not (tokens & LIVE_INTERNET_KEYWORDS))
+
+    # 2. Scientific Research
+    has_research_kw = bool(tokens & RESEARCH_KEYWORDS) or any(kw in text for kw in ("delay discounting", "cognitive science", "mental health"))
+    needs_research = has_research_kw or classify_topic(question) in ("human_behavior", "productivity")
+
+    # 3. Live Internet Intelligence
+    has_live_kw = bool(tokens & LIVE_INTERNET_KEYWORDS) or any(kw in text for kw in ("real time", "real-time", "as of"))
+    needs_live = has_live_kw or (classify_topic(question) == "technology" and not has_traditional_kw)
+
+    # 4. Reasoning
+    needs_reasoning = True  # Always available for synthesis when requested
+
+    rationale = {
+        "traditional_knowledge": (
+            "Indicated by explicit Gītā keywords or philosophical citation references."
+            if needs_traditional
+            else "Bypassed: Question does not indicate traditional scriptural or Gītā inquiry."
+        ),
+        "scientific_research": (
+            "Indicated by empirical research, psychology, or behavioral keywords."
+            if needs_research
+            else "Bypassed: Question does not indicate empirical scientific research."
+        ),
+        "live_internet": (
+            "Indicated by temporal keywords ('recent', 'latest', '2026', 'current') or real-time topics."
+            if needs_live
+            else "Bypassed: Question does not require real-time web retrieval."
+        ),
+        "reasoning": "Available for structured synthesis and multi-domain comparative analysis.",
+    }
+
+    return SubsystemPlan(
+        question=question,
+        needs_traditional_knowledge=needs_traditional,
+        needs_scientific_research=needs_research,
+        needs_live_internet=needs_live,
+        needs_reasoning=needs_reasoning,
+        selection_rationale=rationale,
+    )
+
+
 def create_brief(
     question: str,
     kb: Any = None,
@@ -130,58 +241,105 @@ def create_brief(
     attach_research: bool = True,
     claims: list[Any] | None = None,
     fact_checker: Any = None,
+    search_mgr: Any = None,
+    attach_web: bool = True,
+    force_knowledge: bool | None = None,
+    force_research: bool | None = None,
+    force_web: bool | None = None,
 ) -> IntelligenceBrief:
     """Create a structured, human-supervised intelligence brief from a question.
 
-    Integrates with Module 2 Knowledge Retrieval Bridge, Module 3 Research
-    Intelligence, and Module 4 Fact-Checking Engine to attach verified primary
-    knowledge, modern empirical evidence, and claim validation reports.
+    Intelligently integrates with:
+    - Traditional Knowledge Retrieval Bridge (Module 2)
+    - Modern Scientific Research Intelligence (Module 3)
+    - Anti-Hallucination & Fact-Checking Engine (Module 4)
+    - Real-Time Live Web Intelligence (Part A)
 
     Args:
         question: Raw question submitted by user or client.
         kb: Optional KnowledgeBase instance to use for retrieval.
-        attach_knowledge: Whether to query KnowledgeBase for verified knowledge.
+        attach_knowledge: Whether to query KnowledgeBase if indicated.
         research_mgr: Optional ResearchManager instance for empirical research.
-        attach_research: Whether to query ResearchManager for empirical evidence.
+        attach_research: Whether to query ResearchManager if indicated.
         claims: Optional list of Claim objects or dicts to fact-check.
         fact_checker: Optional FactChecker instance to use for validation.
+        search_mgr: Optional SearchManager instance for live web retrieval.
+        attach_web: Whether to query SearchManager if indicated.
+        force_knowledge: Explicit override to force or bypass traditional retrieval.
+        force_research: Explicit override to force or bypass research retrieval.
+        force_web: Explicit override to force or bypass live web retrieval.
 
     Returns:
         Populated IntelligenceBrief instance with human_review_required=True.
     """
     normalized = validate_question(question)
     topic = classify_topic(normalized)
+    plan = classify_subsystems(normalized)
 
+    # Determine subsystem invocations (overrides take precedence if provided)
+    run_knowledge = plan.needs_traditional_knowledge if force_knowledge is None else force_knowledge
+    run_research = plan.needs_scientific_research if force_research is None else force_research
+    run_web = plan.needs_live_internet if force_web is None else force_web
+
+    # 1. Traditional Knowledge Retrieval
     knowledge_context: dict[str, Any] = {}
     if attach_knowledge:
-        try:
-            from engine.retrieval import retrieve_knowledge
-            retrieval_result = retrieve_knowledge(normalized, topic=topic, kb=kb)
-            knowledge_context = retrieval_result.to_dict()
-        except Exception as exc:
-            logger.warning("Knowledge retrieval failed during brief creation: %s", exc)
+        if run_knowledge:
+            try:
+                from engine.retrieval import retrieve_knowledge
+                retrieval_result = retrieve_knowledge(normalized, topic=topic, kb=kb)
+                knowledge_context = retrieval_result.to_dict()
+            except Exception as exc:
+                logger.warning("Knowledge retrieval failed during brief creation: %s", exc)
+                knowledge_context = {
+                    "query": normalized,
+                    "retrieval_indicated": False,
+                    "status": "error",
+                    "reason": f"Retrieval bridge error: {exc}",
+                    "total_found": 0,
+                    "records": [],
+                }
+        else:
             knowledge_context = {
                 "query": normalized,
                 "retrieval_indicated": False,
-                "status": "error",
-                "reason": f"Retrieval bridge error: {exc}",
+                "status": "retrieval_not_indicated",
+                "reason": plan.selection_rationale["traditional_knowledge"],
                 "total_found": 0,
                 "records": [],
             }
 
+    # 2. Scientific & Empirical Research Intelligence
     research_context: dict[str, Any] = {}
     if attach_research:
-        try:
-            from engine.research import ResearchManager
-            mgr = research_mgr if research_mgr is not None else ResearchManager()
-            r_ctx = mgr.collect_research_for_question(normalized, topic=topic)
-            research_context = r_ctx.to_dict()
-        except Exception as exc:
-            logger.debug("Research collection skipped or unavailable: %s", exc)
+        if run_research:
+            try:
+                from engine.research import ResearchManager
+                mgr = research_mgr if research_mgr is not None else ResearchManager()
+                r_ctx = mgr.collect_research_for_question(normalized, topic=topic)
+                research_context = r_ctx.to_dict()
+            except Exception as exc:
+                logger.debug("Research collection skipped or unavailable: %s", exc)
+                research_context = {
+                    "query": normalized,
+                    "status": "unavailable",
+                    "reason": f"Research intelligence unavailable: {exc}",
+                    "total_sources": 0,
+                    "total_evidence": 0,
+                    "sources": [],
+                    "evidence_by_classification": {
+                        "supporting": [],
+                        "contradicting": [],
+                        "contextual": [],
+                        "inconclusive": [],
+                    },
+                    "evidence_gaps": [],
+                }
+        else:
             research_context = {
                 "query": normalized,
-                "status": "unavailable",
-                "reason": f"Research intelligence unavailable: {exc}",
+                "status": "bypassed",
+                "reason": plan.selection_rationale["scientific_research"],
                 "total_sources": 0,
                 "total_evidence": 0,
                 "sources": [],
@@ -194,6 +352,40 @@ def create_brief(
                 "evidence_gaps": [],
             }
 
+    # 3. Real-Time Live Web Intelligence
+    web_context: dict[str, Any] = {}
+    if attach_web:
+        if run_web:
+            try:
+                from engine.search import SearchManager
+                s_mgr = search_mgr if search_mgr is not None else SearchManager()
+                s_resp = s_mgr.search(normalized, max_results=5)
+                web_context = s_resp.to_dict()
+            except Exception as exc:
+                logger.warning("Web search failed during brief creation: %s", exc)
+                web_context = {
+                    "query": normalized,
+                    "provider": "unknown",
+                    "status": "unavailable",
+                    "total_results": 0,
+                    "results": [],
+                    "conflicts_detected": [],
+                    "retrieval_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                    "disclosure_note": f"Live search unavailable ({exc}). Proceeding with stored intelligence.",
+                }
+        else:
+            web_context = {
+                "query": normalized,
+                "provider": "none",
+                "status": "bypassed",
+                "total_results": 0,
+                "results": [],
+                "conflicts_detected": [],
+                "retrieval_timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "disclosure_note": plan.selection_rationale["live_internet"],
+            }
+
+    # 4. Anti-Hallucination & Fact-Checking Engine
     validation_context: dict[str, Any] = {}
     if claims:
         try:
@@ -220,14 +412,16 @@ def create_brief(
         knowledge_context=knowledge_context,
         research_context=research_context,
         validation_context=validation_context,
+        web_context=web_context,
+        subsystem_plan=plan.to_dict(),
     )
     logger.info(
-        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d, research_evidence=%d, validated_claims=%d]",
+        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d, research_evidence=%d, web_results=%d, validated_claims=%d]",
         brief.topic,
         brief.human_review_required,
         len(knowledge_context.get("records", [])),
         research_context.get("total_evidence", 0),
+        web_context.get("total_results", 0),
         len(validation_context.get("claims", [])),
     )
     return brief
-
