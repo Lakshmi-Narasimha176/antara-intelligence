@@ -97,6 +97,11 @@ The codebase adheres to the following production engineering standards:
 - **Unit Tests:** `tests/test_research.py` - 16 unit tests covering source insertion, DOI/metadata deduplication, evidence classification, provider timeout/resilience handling, substantive human review requirements, audit logging, and Module 1/2 integration.
 - **Database Tables:** `research_sources`, `research_evidence`, `research_audit` in `data/antara_knowledge.db`.
 
+### Module 4: Anti-Hallucination & Fact-Checking Engine
+- **Engine Core:** `engine/fact_checker.py` - Deterministic, evidence-grounded validation engine that checks whether claims, quotations, source references, and citations are supported by authenticated knowledge records and approved research evidence.
+- **CLI Interface:** `engine/fact_checker_cli.py` - Command-line tools for batch claims validation (`validate`), single Gita quotation checks (`check-gita`), and report generation.
+- **Unit Tests:** `tests/test_fact_checker.py` - 17 unit tests covering valid source references, missing citations, unreviewed/rejected records, SHA-256 tamper detection, exact vs. mismatched quotations, approved vs. rejected empirical evidence, contradiction detection, schema validation, empty collections, database failures, and orchestrator integration.
+
 ---
 
 ## 4. Module 2: Knowledge Intelligence CLI & Workflow
@@ -202,7 +207,7 @@ python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about ac
 # 2. Run with an ordinary non-philosophical inquiry (retrieval safely bypassed)
 python app.py "Why do people procrastinate even when they know what matters?"
 
-# 3. Run the full 59-test suite covering all modules & the retrieval bridge
+# 3. Run the full 76-test suite covering all modules & the retrieval bridge
 python -m unittest discover -s tests -v
 ```
 
@@ -276,7 +281,118 @@ python -m engine.research_cli import --file examples/sample_research.json
 
 ---
 
-## 7. Controlled JSON Import Schema
+## 7. Module 4: Anti-Hallucination & Fact-Checking Engine
+
+### Overview & Philosophy
+Module 4 introduces an evidence-grounded, anti-hallucination validation engine that deterministically audits claims, quotations, source references, and citations produced by or submitted to ANTARĀ.
+
+```
+[User Question]
+       │
+       ▼
+[Intelligence Orchestrator]
+       │
+       ├─► [Verified Gita Retrieval] ─────────────┐
+       │                                          ▼
+       └─► [Approved Research Retrieval] ─► [Structured Claim Package]
+                                                  │
+                                                  ▼
+                                      [Fact-Checking Engine]
+                                                  │
+                                                  ▼
+                                      [Fact-Check Report]
+                                                  │
+                                                  ▼
+                                      [Mandatory Human Review]
+```
+
+### Core Invariants:
+1. **Never Assume AI Correctness:** An LLM is never the authority for factual verification. All checks evaluate against cryptographically verified primary sources and peer-reviewed empirical research in SQLite.
+2. **Source Integrity ≠ Factual Correctness:** A computer check verifying that a citation ID exists or that a SHA-256 hash matches only confirms *mechanical provenance*. It does **not** prove theological, historical, or scientific truth.
+3. **Preserve Contradictions & Uncertainty:** When literature contains conflicting findings (e.g. impulsiveness vs. perfectionism in delay discounting), the engine explicitly identifies contradicting records and flags the claim as `contradicted`, preventing one-sided confirmation bias.
+4. **Quotations vs. Paraphrases:** Exact quotations are mechanically verified against Sanskrit, transliteration, or translation text. Paraphrases and conceptual summaries are categorized as `partially_supported` and flagged with `paraphrase_requires_human_assessment`.
+
+### Deterministic Claim Statuses
+
+| Status | Deterministic Criteria |
+| :--- | :--- |
+| `source_verified` | Verified Gita verse or approved research finding; SHA-256 hash intact; exact or whitespace-normalized quotation matches source text without contradictions. |
+| `partially_supported` | Authenticated source exists and passes hash check, but the claim is a paraphrase, excerpt, or notes methodological limitations in the underlying empirical study. |
+| `unsupported` | No source cited, referenced ID/DOI does not exist in repository, or direct quotation does not match stored text. |
+| `contradicted` | Approved evidence record with `classification == 'contradicting'` exists on the same topic/source. |
+| `insufficient_evidence` | Referenced research source or evidence is unreviewed, or evidence has `low`/`exploratory` strength or unverified sample size. |
+| `requires_human_review` | Interpretive hypotheses, unreviewed verses, or tampered records requiring scholarly human arbitration. |
+
+### Fact-Checking Report Schema (`FactCheckReport`)
+
+Reports are serialized to JSON with the following structure:
+```json
+{
+  "report_id": "fc_20261108_044718_fad414fd",
+  "brief_id": "brief_procrastination_1",
+  "timestamp_utc": "2026-11-08T04:47:18.444542+00:00",
+  "overall_status": "FAILED_UNSUPPORTED",
+  "total_claims": 5,
+  "verified_claims": 1,
+  "partially_supported_claims": 1,
+  "unsupported_claims": 3,
+  "contradicted_claims": 0,
+  "insufficient_evidence_claims": 0,
+  "requires_human_review_claims": 0,
+  "claims": [
+    {
+      "claim_id": "claim_gita_quote_authentic",
+      "claim_text": "To action alone hast thou a right...",
+      "status": "source_verified",
+      "reasons": ["Direct quotation exactly verified against authenticated verse."],
+      "source_exists": true,
+      "source_verified": true,
+      "integrity_valid": true,
+      "is_direct_quote": true,
+      "quote_matches": true,
+      "referenced_source_id": 1,
+      "referenced_record_id": 1,
+      "flags": [],
+      "human_review_required": true
+    }
+  ],
+  "supporting_sources": [
+    {
+      "type": "gita",
+      "id": 1,
+      "title": "The Bhagavadgita",
+      "author": "Dr. S. Radhakrishnan"
+    }
+  ],
+  "contradicting_sources": [],
+  "missing_citations": ["claim_missing_citation"],
+  "integrity_failures": [],
+  "unresolved_questions": [],
+  "human_review_required": true,
+  "summary_notes": "Validated 5 claim(s): 1 verified, 1 partially supported, 3 unsupported..."
+}
+```
+
+### PowerShell Command Examples
+
+```powershell
+# 1. Validate a batch of claims from a JSON file
+python -m engine.fact_checker_cli validate --file examples/sample_claims.json
+
+# 2. Check an individual Bhagavad Gita quotation
+python -m engine.fact_checker_cli check-gita `
+  --chapter 2 `
+  --verse 47 `
+  --quote "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन।" `
+  --field sanskrit
+
+# 3. Run the end-to-end pipeline with claims validation
+python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47?" --claims-file examples/sample_claims.json
+```
+
+---
+
+## 8. Controlled JSON Import Schema
 
 The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two formats:
 
@@ -315,7 +431,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 8. Mechanical vs. Human Verification
+## 9. Mechanical vs. Human Verification
 
 | Dimension | Mechanical Verification (Application Level) | Human Verification (Scholarly & Domain Level) |
 | :--- | :--- | :--- |
@@ -326,9 +442,8 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 9. Next Implementation Modules
+## 10. Next Implementation Modules
 
-1. **Module 4: AI Reasoning Engine & Hypothesis Generation:** Synthesis of verified primary knowledge and empirical research evidence into structured, verifiable insights with uncertainty estimation.
-2. **Module 5: HITL Governance & Publishing Pipeline:** Multi-stage human approval workflow, cryptographic sign-off, and verified publication generation.
+1. **Module 5: HITL Governance & Publishing Pipeline:** Multi-stage human approval state machine, cryptographic publication sign-off, and verified publication generation.
 
 

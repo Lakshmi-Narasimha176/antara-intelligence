@@ -1,0 +1,48 @@
+[
+  {
+    "claim_id": "claim_gita_quote_authentic",
+    "claim_text": "To action alone hast thou a right and never at all to its fruits; let not the fruits of action be thy motive; neither let there be in thee any attachment to inaction.",
+    "claim_type": "gita_quotation",
+    "source_type": "gita",
+    "chapter": 2,
+    "verse": 47,
+    "quote_field": "translation",
+    "quoted_text": "To action alone hast thou a right and never at all to its fruits; let not the fruits of action be thy motive; neither let there be in thee any attachment to inaction.",
+    "citation_locator": "Chapter 2, Verse 47, p. 119",
+    "is_direct_quote": true
+  },
+  {
+    "claim_id": "claim_gita_paraphrase",
+    "claim_text": "In the Bhagavad Gita, Krishna instructs that one has stewardship over effort but no entitlement to results.",
+    "claim_type": "gita_paraphrase",
+    "source_type": "gita",
+    "chapter": 2,
+    "verse": 47,
+    "citation_locator": "Chapter 2, Verse 47",
+    "is_direct_quote": false
+  },
+  {
+    "claim_id": "claim_research_meta_analysis",
+    "claim_text": "Procrastination correlates strongly with impulsiveness (mean r = 0.41), showing self-regulatory failure is heavily driven by immediate temptation discounting.",
+    "claim_type": "research_finding",
+    "source_type": "research",
+    "doi": "10.1037/0033-2909.133.1.65",
+    "quoted_text": "Procrastination correlates strongly with impulsiveness (mean r = 0.41), showing self-regulatory failure is heavily driven by immediate temptation discounting.",
+    "is_direct_quote": true
+  },
+  {
+    "claim_id": "claim_unsupported_doi",
+    "claim_text": "A fabricated neuroimaging study claims dopamine receptors completely deactivate during procrastination.",
+    "claim_type": "research_claim",
+    "source_type": "research",
+    "doi": "10.9999/fabricated.neuro.2026.99",
+    "is_direct_quote": false
+  },
+  {
+    "claim_id": "claim_missing_citation",
+    "claim_text": "People delay difficult tasks because perfectionism paralyzes their executive function.",
+    "claim_type": "research_claim",
+    "source_type": "none",
+    "is_direct_quote": false
+  }
+]

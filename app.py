@@ -47,9 +47,22 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="ANTARĀ Intelligence Engine v1")
     parser.add_argument("question", help="Question to turn into an intelligence brief")
+    parser.add_argument(
+        "--claims-file",
+        help="Optional path to JSON file containing claims to fact-check against repository",
+    )
     args = parser.parse_args()
 
-    brief = create_brief(args.question)
+    claims_data = None
+    if args.claims_file:
+        c_path = Path(args.claims_file)
+        if c_path.is_file():
+            raw_c = json.loads(c_path.read_text(encoding="utf-8"))
+            claims_data = raw_c if isinstance(raw_c, list) else raw_c.get("claims", [])
+        else:
+            print(f"Warning: Claims file '{c_path}' not found.", file=sys.stderr)
+
+    brief = create_brief(args.question, claims=claims_data)
     output_dir = Path("outputs")
     output_dir.mkdir(exist_ok=True)
     output_path = output_dir / "latest_brief.json"
@@ -95,6 +108,22 @@ def main() -> None:
             print("  [EVIDENCE GAPS & LIMITATIONS]:")
             for gap in r_ctx["evidence_gaps"]:
                 print(f"    * {gap}")
+
+    val_ctx = brief.validation_context
+    if val_ctx and val_ctx.get("total_claims", 0) > 0:
+        print("\nAnti-Hallucination & Fact-Checking Report:")
+        print(f"  Overall Outcome:        {val_ctx.get('overall_status')}")
+        print(f"  Total Claims Assessed:  {val_ctx.get('total_claims')}")
+        print(f"  ├─ Source Verified:         {val_ctx.get('verified_claims')}")
+        print(f"  ├─ Partially Supported:     {val_ctx.get('partially_supported_claims')}")
+        print(f"  ├─ Unsupported / Invalid:   {val_ctx.get('unsupported_claims')}")
+        print(f"  ├─ Explicit Contradictions: {val_ctx.get('contradicted_claims')}")
+        print(f"  └─ Requiring Human Review:  {val_ctx.get('requires_human_review_claims')}")
+        if val_ctx.get("integrity_failures"):
+            print("  [!] CRYPTOGRAPHIC INTEGRITY FAILURES DETECTED!")
+        val_path = output_dir / "latest_validation_report.json"
+        val_path.write_text(json.dumps(val_ctx, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"  Saved validation report to: {val_path}")
 
     print(f"\nSaved brief to: {output_path}")
 

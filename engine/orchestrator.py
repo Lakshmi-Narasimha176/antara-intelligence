@@ -58,6 +58,7 @@ class IntelligenceBrief:
     created_at_utc: str
     knowledge_context: dict[str, Any] = field(default_factory=dict)
     research_context: dict[str, Any] = field(default_factory=dict)
+    validation_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert intelligence brief to a JSON-serializable dictionary."""
@@ -127,11 +128,14 @@ def create_brief(
     attach_knowledge: bool = True,
     research_mgr: Any = None,
     attach_research: bool = True,
+    claims: list[Any] | None = None,
+    fact_checker: Any = None,
 ) -> IntelligenceBrief:
     """Create a structured, human-supervised intelligence brief from a question.
 
-    Integrates with Module 2 Knowledge Retrieval Bridge and Module 3 Research
-    Intelligence to attach verified primary source knowledge and modern empirical evidence.
+    Integrates with Module 2 Knowledge Retrieval Bridge, Module 3 Research
+    Intelligence, and Module 4 Fact-Checking Engine to attach verified primary
+    knowledge, modern empirical evidence, and claim validation reports.
 
     Args:
         question: Raw question submitted by user or client.
@@ -139,6 +143,8 @@ def create_brief(
         attach_knowledge: Whether to query KnowledgeBase for verified knowledge.
         research_mgr: Optional ResearchManager instance for empirical research.
         attach_research: Whether to query ResearchManager for empirical evidence.
+        claims: Optional list of Claim objects or dicts to fact-check.
+        fact_checker: Optional FactChecker instance to use for validation.
 
     Returns:
         Populated IntelligenceBrief instance with human_review_required=True.
@@ -188,6 +194,21 @@ def create_brief(
                 "evidence_gaps": [],
             }
 
+    validation_context: dict[str, Any] = {}
+    if claims:
+        try:
+            from engine.fact_checker import FactChecker
+            checker = fact_checker if fact_checker is not None else FactChecker()
+            report = checker.validate_claims(claims, brief_id=normalized)
+            validation_context = report.to_dict()
+        except Exception as exc:
+            logger.warning("Fact-checking failed during brief creation: %s", exc)
+            validation_context = {
+                "status": "error",
+                "reason": f"Validation error: {exc}",
+                "total_claims": len(claims),
+            }
+
     brief = IntelligenceBrief(
         question=normalized,
         topic=topic,
@@ -198,13 +219,15 @@ def create_brief(
         created_at_utc=datetime.now(timezone.utc).isoformat(),
         knowledge_context=knowledge_context,
         research_context=research_context,
+        validation_context=validation_context,
     )
     logger.info(
-        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d, research_evidence=%d]",
+        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d, research_evidence=%d, validated_claims=%d]",
         brief.topic,
         brief.human_review_required,
         len(knowledge_context.get("records", [])),
         research_context.get("total_evidence", 0),
+        len(validation_context.get("claims", [])),
     )
     return brief
 
