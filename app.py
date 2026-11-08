@@ -64,6 +64,19 @@ def main() -> None:
     print("\nInitial objectives:")
     for objective in brief.objectives:
         print(f"- {objective}")
+
+    records = brief.knowledge_context.get("records", [])
+    if records:
+        print("\nVerified Primary Knowledge Sources:")
+        for r in records:
+            src = r.get("source", {})
+            src_str = f"{src.get('title', 'Unknown')} ({src.get('author', 'Unknown')})"
+            print(f"- Bhagavad Gītā Ch {r['chapter']}, Verse {r['verse']} [{r.get('locator') or 'N/A'}]")
+            print(f"  Source: {src_str}")
+            print(f"  Translation: {r['translation']}")
+    elif brief.knowledge_context.get("retrieval_indicated"):
+        print(f"\nKnowledge Retrieval: {brief.knowledge_context.get('reason')}")
+
     print(f"\nSaved brief to: {output_path}")
 
 

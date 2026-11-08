@@ -4,7 +4,7 @@ This module provides question validation, initial topic classification, and
 structured brief generation for the human-supervised intelligence workflow.
 """
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 import logging
 from typing import Any
@@ -45,6 +45,7 @@ class IntelligenceBrief:
         status: Overall status of the intelligence brief.
         human_review_required: Flag enforcing mandatory human supervision.
         created_at_utc: ISO 8601 UTC timestamp of brief creation.
+        knowledge_context: Verified primary source knowledge attached via retrieval bridge.
     """
 
     question: str
@@ -54,6 +55,7 @@ class IntelligenceBrief:
     status: str
     human_review_required: bool
     created_at_utc: str
+    knowledge_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert intelligence brief to a JSON-serializable dictionary."""
@@ -117,17 +119,44 @@ def classify_topic(question: str) -> str:
     return "general"
 
 
-def create_brief(question: str) -> IntelligenceBrief:
+def create_brief(
+    question: str,
+    kb: Any = None,
+    attach_knowledge: bool = True,
+) -> IntelligenceBrief:
     """Create a structured, human-supervised intelligence brief from a question.
+
+    Integrates with Module 2 Knowledge Retrieval Bridge to attach verified primary
+    source knowledge when philosophical or Bhagavad Gītā inquiry is indicated.
 
     Args:
         question: Raw question submitted by user or client.
+        kb: Optional KnowledgeBase instance to use for retrieval.
+        attach_knowledge: Whether to query KnowledgeBase for verified knowledge.
 
     Returns:
         Populated IntelligenceBrief instance with human_review_required=True.
     """
     normalized = validate_question(question)
     topic = classify_topic(normalized)
+
+    knowledge_context: dict[str, Any] = {}
+    if attach_knowledge:
+        try:
+            from engine.retrieval import retrieve_knowledge
+            retrieval_result = retrieve_knowledge(normalized, topic=topic, kb=kb)
+            knowledge_context = retrieval_result.to_dict()
+        except Exception as exc:
+            logger.warning("Knowledge retrieval failed during brief creation: %s", exc)
+            knowledge_context = {
+                "query": normalized,
+                "retrieval_indicated": False,
+                "status": "error",
+                "reason": f"Retrieval bridge error: {exc}",
+                "total_found": 0,
+                "records": [],
+            }
+
     brief = IntelligenceBrief(
         question=normalized,
         topic=topic,
@@ -136,11 +165,13 @@ def create_brief(question: str) -> IntelligenceBrief:
         status="brief_created",
         human_review_required=True,
         created_at_utc=datetime.now(timezone.utc).isoformat(),
+        knowledge_context=knowledge_context,
     )
     logger.info(
-        "Created intelligence brief [topic=%s, human_review_required=%s]",
+        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d]",
         brief.topic,
         brief.human_review_required,
+        len(knowledge_context.get("records", [])),
     )
     return brief
 

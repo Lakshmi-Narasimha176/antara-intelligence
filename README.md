@@ -85,6 +85,12 @@ The codebase adheres to the following production engineering standards:
 - **Unit Tests:** `tests/test_knowledge.py` - 17 unit tests covering schema creation, source normalization, verse constraints, duplicate rejection, UTF-8 preservation, dry-run imports, partial failure handling, human verification transitions, substantive evidence enforcement, content modification invalidation, and tamper detection.
 - **Runtime Database:** `data/antara_knowledge.db` - Local SQLite database storing normalized bibliographic sources, verses, and append-only audit records.
 
+### Knowledge Retrieval Bridge (Module 1 ↔ Module 2 Integration)
+- **Bridge Core:** `engine/retrieval.py` - Semantic and citation routing, verified-only querying, defense-in-depth cryptographic integrity checks, and graceful fallbacks.
+- **Orchestrator Integration:** `engine/orchestrator.py` - Enriches `IntelligenceBrief` with an immutable `knowledge_context` field containing verified primary source records when philosophical inquiry is indicated.
+- **CLI Presentation:** `app.py` - Displays verified primary sources and source provenance directly alongside the research brief.
+- **Unit Tests:** `tests/test_retrieval.py` - 14 unit tests covering verified retrieval, unreviewed/rejected/tampered record exclusion, provenance preservation, empty search results, non-philosophical query routing, missing database resilience, and backward compatibility.
+
 ---
 
 ## 4. Module 2: Knowledge Intelligence CLI & Workflow
@@ -142,7 +148,61 @@ python -m engine.knowledge_cli explain-verification
 
 ---
 
-## 5. Controlled JSON Import Schema
+## 5. Knowledge Retrieval Bridge & Integrated Execution
+
+### Architecture: Connecting Module 1 to Module 2
+
+The Knowledge Retrieval Bridge ([`engine/retrieval.py`](file:///c:/Users/ln123/Documents/LN/Coding/My%20Projects/Antara%20Intelligence/engine/retrieval.py)) links the question orchestrator with the knowledge repository through four strictly controlled stages:
+
+```
+[User Question]
+       │
+       ▼
+[1. Routing Gate: should_retrieve_knowledge()]
+  ├── Topic == 'philosophy'? ──► Retrieval Indicated
+  ├── Gita Keywords / BG Citations? ──► Retrieval Indicated
+  └── Non-Philosophical (e.g. Behavior/Tech)? ──► Retrieval Bypassed (empty collection returned)
+       │
+       ▼ (if indicated)
+[2. Query Formulation]
+  ├── Explicit Verse Reference (e.g. 'Chapter 2, Verse 47' or 'BG 2.47')
+  └── Keyword Extraction (filters out stop words)
+       │
+       ▼
+[3. Verified-Only Query & Integrity Filtering]
+  ├── KnowledgeBase.search_verses(verified_only=True)
+  ├── Excludes unreviewed, rejected, and invalidated records
+  └── Cryptographic check: compute_content_hash(...) == record.content_hash
+       │
+       ▼
+[4. Brief Enrichment (IntelligenceBrief)]
+  └── Attaches verified primary source records into 'knowledge_context'
+```
+
+### Running the Integrated Application
+
+Run the integrated application directly with PowerShell:
+
+```powershell
+# Activate the virtual environment
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\Activate.ps1
+$OutputEncoding = [System.Text.Encoding]::UTF8
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 1. Run integrated application with a philosophical inquiry (attaches verified Gita knowledge)
+python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about action and fruits?"
+
+# 2. Run with an ordinary non-philosophical inquiry (retrieval safely bypassed)
+python app.py "Why do people procrastinate even when they know what matters?"
+
+# 3. Run the full 43-test suite covering all modules & the retrieval bridge
+python -m unittest discover -s tests -v
+```
+
+---
+
+## 6. Controlled JSON Import Schema
 
 The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two formats:
 
@@ -181,7 +241,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 6. Mechanical vs. Human Verification
+## 7. Mechanical vs. Human Verification
 
 | Dimension | Mechanical Verification (Application Level) | Human Verification (Scholarly & Domain Level) |
 | :--- | :--- | :--- |
@@ -192,7 +252,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 7. Next Implementation Modules
+## 8. Next Implementation Modules
 
 1. **Research & Evidence Retrieval:** Structured external evidence gathering distinguishing empirical facts from hypotheses.
 2. **Verification & Fact-Checking Engine:** Strict citation cross-referencing ensuring no AI hallucinations or fabricated claims.
