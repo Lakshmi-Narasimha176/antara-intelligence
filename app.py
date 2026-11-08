@@ -51,6 +51,16 @@ def main() -> None:
         "--claims-file",
         help="Optional path to JSON file containing claims to fact-check against repository",
     )
+    parser.add_argument(
+        "--reason",
+        action="store_true",
+        help="Execute AI reasoning synthesis using authenticated primary sources and approved research",
+    )
+    parser.add_argument(
+        "--mock-llm",
+        action="store_true",
+        help="Force MockLLMProvider for offline deterministic reasoning without network",
+    )
     args = parser.parse_args()
 
     claims_data = None
@@ -124,6 +134,34 @@ def main() -> None:
         val_path = output_dir / "latest_validation_report.json"
         val_path.write_text(json.dumps(val_ctx, indent=2, ensure_ascii=False), encoding="utf-8")
         print(f"  Saved validation report to: {val_path}")
+
+    if args.reason:
+        from engine.llm_provider import MockLLMProvider
+        from engine.openai_provider import OpenAIProvider
+        from engine.reasoning import ReasoningEngine
+
+        if args.mock_llm:
+            provider = MockLLMProvider()
+        else:
+            try:
+                provider = OpenAIProvider()
+            except Exception as exc:
+                print(f"\nNotice: OpenAI provider unavailable ({exc}). Using offline MockLLMProvider.")
+                provider = MockLLMProvider()
+
+        engine = ReasoningEngine(provider=provider)
+        analysis = engine.analyze_brief(brief)
+        reason_path = output_dir / "latest_reasoning_report.json"
+        reason_path.write_text(analysis.to_json(), encoding="utf-8")
+
+        print("\n" + "=" * 50)
+        print("ANTARĀ AI REASONING SYNTHESIS")
+        print(f"Report ID: {analysis.report_id}")
+        print(f"Status:    [{analysis.status.upper()}] (Human Review Required: {analysis.human_review_required})")
+        print(f"\nExecutive Summary:\n  {analysis.executive_summary}")
+        print(f"\nSynthesized Insight:\n  {analysis.original_synthesized_insight}")
+        print(f"\nSaved reasoning report to: {reason_path}")
+        print("=" * 50)
 
     print(f"\nSaved brief to: {output_path}")
 

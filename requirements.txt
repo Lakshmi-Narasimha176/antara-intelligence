@@ -1,8 +1,9 @@
 # ANTARĀ Intelligence Engine v1 - Runtime Dependencies
-# Core engine operates purely on Python 3.12+ standard library with zero external dependencies.
+# Core knowledge, retrieval, and fact-checking operate on Python 3.12+ standard library.
+# AI Reasoning Engine uses the official OpenAI Python SDK:
+openai>=1.0.0
 
 # Optional development & quality assurance tools:
 # mypy>=1.8.0
 # ruff>=0.3.0
 # pytest>=8.0.0
-

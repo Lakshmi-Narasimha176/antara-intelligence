@@ -102,6 +102,14 @@ The codebase adheres to the following production engineering standards:
 - **CLI Interface:** `engine/fact_checker_cli.py` - Command-line tools for batch claims validation (`validate`), single Gita quotation checks (`check-gita`), and report generation.
 - **Unit Tests:** `tests/test_fact_checker.py` - 17 unit tests covering valid source references, missing citations, unreviewed/rejected records, SHA-256 tamper detection, exact vs. mismatched quotations, approved vs. rejected empirical evidence, contradiction detection, schema validation, empty collections, database failures, and orchestrator integration.
 
+### AI Reasoning Engine & LLM Providers
+- **Provider Layer:** `engine/llm_provider.py` & `engine/openai_provider.py` - Provider-independent reasoning architecture with official OpenAI SDK support, configurable timeout, limited retries, refusal/truncation handling, and offline `MockLLMProvider`.
+- **Context Builder:** `engine/context_builder.py` - Assembles strictly bounded, provenance-preserving contexts containing verified Gītā verses and approved empirical evidence, filtering out unreviewed or tampered data.
+- **Reasoning Core:** `engine/reasoning.py` - Generates 16-dimensional philosophical-scientific syntheses, rejects fabricated IDs, catches forbidden claims, and enforces Module 4 validation.
+- **CLI Interface:** `engine/reasoning_cli.py` - Command-line tools for synthesis (`synthesize`), human review recording (`review`), and report inspection (`get`).
+- **Unit Tests:** `tests/test_reasoning.py` - 14 unit tests covering provider abstraction, client-injected response normalization, error translation, timeout/retry/refusal handling, context filtering, lifecycle state transitions, and Module 4 validation gating.
+- **Database Tables:** `reasoning_reports`, `reasoning_audit` in `data/antara_knowledge.db`.
+
 ---
 
 ## 4. Module 2: Knowledge Intelligence CLI & Workflow
@@ -207,7 +215,7 @@ python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about ac
 # 2. Run with an ordinary non-philosophical inquiry (retrieval safely bypassed)
 python app.py "Why do people procrastinate even when they know what matters?"
 
-# 3. Run the full 76-test suite covering all modules & the retrieval bridge
+# 3. Run the full 90-test suite covering all modules & the retrieval bridge
 python -m unittest discover -s tests -v
 ```
 
@@ -392,7 +400,101 @@ python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47?" --clai
 
 ---
 
-## 8. Controlled JSON Import Schema
+## 8. AI Reasoning Engine & OpenAI Provider Architecture
+
+### Overview & Pipeline
+The AI Reasoning Engine combines authenticated primary scripture (Bhagavad Gītā) and approved modern research (psychology, neuroscience) to generate deep philosophical-scientific syntheses:
+
+```
+[User Question]
+       │
+       ▼
+[Intelligence Orchestrator] ──► [Context Builder] (filters verified & approved records only)
+                                      │
+                                      ▼
+                            [LLM Provider Layer] (OpenAI / MockLLMProvider)
+                                      │
+                                      ▼
+                            [Structured 16-D JSON]
+                                      │
+                                      ▼
+                         [Module 4 Fact-Checking Audit]
+                                      │
+               ┌──────────────────────┴──────────────────────┐
+               ▼                                             ▼
+     [FAILED / COMPROMISED]                        [PASSED VERIFIED]
+               │                                             │
+               ▼                                             ▼
+    Status: validation_failed                     Status: pending_review
+    (Approval Strictly Blocked)                              │
+                                                             ▼
+                                                [Human Review Workflow]
+                                                (Approved or Rejected)
+```
+
+### Core Invariants:
+1. **Never Claim Science "Proves" the Gītā:** Treats primary scripture and empirical science as distinct epistemological frameworks with distinct ontologies and truth criteria.
+2. **Strict Provenance & Zero ID Invention:** Models may only reference explicit `GITA_VERSE_ID` and `RESEARCH_EVIDENCE_ID` identifiers present in the bounded context.
+3. **Module 4 Validation Gate:** Any generated report referencing fabricated IDs, failing quote matching, or asserting forbidden proof claims enters `validation_failed`.
+4. **Controlled Lifecycle States:** `generated` $\rightarrow$ `validation_failed` (terminal until regenerated) OR `pending_review` $\rightarrow$ `approved` / `rejected`. Reports in `validation_failed` cannot be approved.
+5. **No Automatic Publishing:** All outputs require human supervision (`human_review_required = True`).
+
+### OpenAI Configuration & Environment Variables
+Configured via environment variables (`.env.example` provided; `.env` is git-ignored):
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `OPENAI_API_KEY` | Official OpenAI API Key (`sk-...`). **Never hardcode or commit.** | *None* |
+| `OPENAI_MODEL` | Target OpenAI model identifier. | `gpt-4o-mini` |
+| `OPENAI_TIMEOUT` | Request timeout in seconds. | `30.0` |
+| `OPENAI_MAX_RETRIES` | Maximum retry attempts on transient network errors. | `2` |
+
+### 16-Dimensional Output Schema (`ReasoningAnalysis`)
+1. `executive_summary`: High-level synthesis.
+2. `philosophical_perspective`: Systematic Bhagavad Gītā framework.
+3. `relevant_gita_teachings`: Verses cited with Sanskrit and translation.
+4. `modern_scientific_perspectives`: Contemporary psychological/cognitive paradigms.
+5. `supporting_research_evidence`: Corroborating empirical studies.
+6. `contradicting_research_evidence`: Conflicting studies and boundary conditions.
+7. `philosophical_and_scientific_similarities`: Conceptual convergences.
+8. `important_differences`: Ontological and methodological distinctions.
+9. `critical_analysis`: Rigorous comparative evaluation.
+10. `original_synthesized_insight`: Novel synthesis respecting domain boundaries.
+11. `practical_implications`: Actionable real-world guidance.
+12. `limitations_and_uncertainty`: Epistemic and methodological caveats.
+13. `research_gaps`: Unresolved empirical and philosophical questions.
+14. `exact_source_citations`: Explicit provenance mappings.
+15. `claims_requiring_human_review`: Discrete factual/interpretive claims submitted to Module 4.
+16. `validation_report`: Complete Module 4 audit log.
+
+### PowerShell Command Examples
+
+```powershell
+# 1. Execute reasoning synthesis offline using MockLLMProvider
+python -m engine.reasoning_cli synthesize "What does the Bhagavad Gita teach in Chapter 2, Verse 47?" --mock
+
+# 2. Review and record human approval on a pending report
+python -m engine.reasoning_cli review `
+  --report-id "reason_20261108_052517_bae379e8" `
+  --decision approved `
+  --reviewer "Dr. S. Radhakrishnan" `
+  --notes "Scholarly review confirms Niṣkāma Karma synthesis and valid comparative methodology."
+
+# 3. Inspect a persisted reasoning report and review audit trail
+python -m engine.reasoning_cli get --report-id "reason_20261108_052517_bae379e8"
+
+# 4. Run end-to-end question analysis with reasoning synthesis
+python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47?" --reason --mock-llm
+
+# 5. Controlled Live API Smoke-Test (Requires valid OPENAI_API_KEY in environment)
+$env:OPENAI_API_KEY = "sk-..."
+$env:OPENAI_MODEL = "gpt-4o-mini"
+python -m engine.reasoning_cli synthesize "What does the Bhagavad Gita teach in Chapter 2, Verse 47?"
+```
+
+---
+
+## 9. Controlled JSON Import Schema
 
 The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two formats:
 
@@ -431,7 +533,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 9. Mechanical vs. Human Verification
+## 10. Mechanical vs. Human Verification
 
 | Dimension | Mechanical Verification (Application Level) | Human Verification (Scholarly & Domain Level) |
 | :--- | :--- | :--- |
@@ -442,7 +544,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 10. Next Implementation Modules
+## 11. Next Implementation Modules
 
 1. **Module 5: HITL Governance & Publishing Pipeline:** Multi-stage human approval state machine, cryptographic publication sign-off, and verified publication generation.
 
