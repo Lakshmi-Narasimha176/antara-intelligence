@@ -26,6 +26,15 @@ outputs/*.json
 !outputs/.gitkeep
 *.log
 
+# Runtime Databases
+data/*.db
+data/*.sqlite3
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+!data/.gitkeep
+
+
 # OS & Editor Artifacts
 .DS_Store
 Thumbs.db

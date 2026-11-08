@@ -1,0 +1,23 @@
+{
+  "source": {
+    "title": "The Bhagavadgita: With an Introductory Essay, Sanskrit Text, English Translation and Notes",
+    "author": "Dr. S. Radhakrishnan",
+    "translator": "Dr. S. Radhakrishnan",
+    "edition": "HarperCollins 1993",
+    "year": 1993,
+    "url": "https://archive.org/details/the-bhagavadgita-radhakrishnan",
+    "rights_note": "Public research commentary under scholarly fair dealing principles."
+  },
+  "verses": [
+    {
+      "chapter": 2,
+      "verse": 47,
+      "sanskrit": "कर्मण्येवाधिकारस्ते मा फलेषु कदाचन।\nमा कर्मफलहेतुर्भूर्मा ते सङ्गोऽस्त्वकर्मणि॥",
+      "transliteration": "karmaṇy evādhikāras te mā phaleṣu kadācana |\nmā karma-phala-hetur bhūr mā te saṅgo 'stv akarmaṇi ||",
+      "translation": "To action alone hast thou a right and never at all to its fruits; let not the fruits of action be thy motive; neither let there be in thee any attachment to inaction.",
+      "language": "en",
+      "locator": "Chapter 2, Verse 47, p. 119",
+      "notes": "Fundamental formulation of Niṣkāma Karma (action without desire for fruits)."
+    }
+  ]
+}
