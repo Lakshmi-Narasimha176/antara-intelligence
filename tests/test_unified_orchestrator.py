@@ -387,10 +387,12 @@ class Layer1UnifiedIntegrationTests(unittest.TestCase):
             notes="Authorized for publication as primary comparative research brief.",
         )
 
-        # Step D: Publication via LocalFilePublisher
+        # Step D: Publication via LocalFilePublisher (isolated in temporary directory)
+        isolated_pub = LocalFilePublisher(output_root=Path(self.temp_dir.name) / "publications")
         pub_record = self.unified_engine.publish_report(
             report_id=analysis.report_id,
             channel="local_file",
+            publisher=isolated_pub,
         )
         self.assertEqual(pub_record.status, "published")
         self.assertIsNotNone(pub_record.published_at_utc)

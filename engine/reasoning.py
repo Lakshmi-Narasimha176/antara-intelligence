@@ -24,15 +24,12 @@ from typing import Any, Generator
 
 from engine.context_builder import ContextBuilder, FormattedContext
 from engine.fact_checker import (
-    FactCheckReport,
     FactChecker,
-    STATUS_CONTRADICTED,
-    STATUS_UNSUPPORTED,
     Claim,
 )
 from engine.knowledge import DEFAULT_DB_PATH, validate_substantive_evidence
-from engine.llm_provider import LLMError, LLMMessage, LLMProvider, MockLLMProvider
-from engine.orchestrator import AntaraError, IntelligenceBrief, create_brief
+from engine.llm_provider import LLMMessage, LLMProvider, MockLLMProvider
+from engine.orchestrator import AntaraError, IntelligenceBrief
 
 logger = logging.getLogger("antara.reasoning")
 

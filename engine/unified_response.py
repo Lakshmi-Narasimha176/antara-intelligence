@@ -8,7 +8,6 @@ and human governance status.
 """
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
 import json
 import logging
 from typing import Any
@@ -74,6 +73,7 @@ class UnifiedResponse:
     created_at_utc: str
     updated_at_utc: str
     governance_status: str = "pending_review"
+    language_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert unified response to dictionary."""
@@ -265,6 +265,14 @@ def build_unified_response(
         "audit_trail": analysis.review_audit,
     }
 
+    # 10. Language foundation metadata
+    lang_metadata = {
+        "query_language": getattr(brief, "query_language", "unknown"),
+        "response_language": getattr(brief, "response_language", "english"),
+        "dialect": getattr(brief, "dialect", None),
+        "code_switching": getattr(brief, "code_switching", None),
+    }
+
     return UnifiedResponse(
         report_id=analysis.report_id,
         question=brief.question,
@@ -282,4 +290,5 @@ def build_unified_response(
         created_at_utc=analysis.created_at_utc,
         updated_at_utc=analysis.updated_at_utc,
         governance_status=gov_status,
+        language_metadata=lang_metadata,
     )

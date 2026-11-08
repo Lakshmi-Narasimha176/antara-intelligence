@@ -9,7 +9,6 @@ import json
 import logging
 from pathlib import Path
 import sys
-from typing import Any
 
 from engine.fact_checker import (
     Claim,

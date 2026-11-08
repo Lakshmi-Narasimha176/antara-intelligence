@@ -8,7 +8,6 @@ import argparse
 import json
 import logging
 import sys
-from typing import Any
 
 from engine.search import (
     MockSearchProvider,

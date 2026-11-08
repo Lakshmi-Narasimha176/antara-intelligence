@@ -5,13 +5,10 @@ inspect 16-dimensional analysis cards, and manage the human review lifecycle.
 """
 
 import argparse
-import json
 import logging
 from pathlib import Path
 import sys
-from typing import Any
 
-from engine.fact_checker import FactChecker
 from engine.knowledge import DEFAULT_DB_PATH
 from engine.llm_provider import MockLLMProvider
 from engine.openai_provider import OpenAIProvider

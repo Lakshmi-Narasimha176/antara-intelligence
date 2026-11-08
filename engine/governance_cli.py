@@ -5,7 +5,6 @@ authorize releases, execute cryptographic publishing gates, and inspect audit hi
 """
 
 import argparse
-import json
 import logging
 from pathlib import Path
 import sys

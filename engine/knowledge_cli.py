@@ -5,11 +5,9 @@ tamper detection, and the human verification workflow.
 """
 
 import argparse
-import json
 import logging
 from pathlib import Path
 import sys
-from typing import Any
 
 from engine.knowledge import (
     DEFAULT_DB_PATH,

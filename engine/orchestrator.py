@@ -5,6 +5,7 @@ subsystem routing, and structured brief generation for the human-supervised inte
 """
 
 from dataclasses import asdict, dataclass, field
+from engine.language import detect_language, identify_dialect
 from datetime import datetime, timezone
 import logging
 import re
@@ -96,6 +97,8 @@ class IntelligenceBrief:
         validation_context: Module 4 Anti-Hallucination & Fact-Checking report context.
         web_context: Real-time web intelligence and search context attached via Part A.
         subsystem_plan: Intelligent routing plan recording which subsystems were invoked.
+        query_language: Detected language of the input query (telugu, english, mixed, unknown).
+        response_language: Preferred language for the final response (defaults to query language if known).
     """
 
     question: str
@@ -110,6 +113,10 @@ class IntelligenceBrief:
     validation_context: dict[str, Any] = field(default_factory=dict)
     web_context: dict[str, Any] = field(default_factory=dict)
     subsystem_plan: dict[str, Any] = field(default_factory=dict)
+    query_language: str = "unknown"
+    response_language: str = "english"
+    dialect: str | None = None
+    code_switching: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert intelligence brief to a JSON-serializable dictionary."""
@@ -401,6 +408,13 @@ def create_brief(
                 "total_claims": len(claims),
             }
 
+    # 5. Language, Dialect and Code-Switching Detection
+    detected_lang = detect_language(normalized)
+    resp_lang = "telugu" if detected_lang == "telugu" else "english"
+    detected_dialect = identify_dialect(normalized)
+    from engine.nlp import detect_code_switching
+    cs_meta = detect_code_switching(normalized).to_dict()
+
     brief = IntelligenceBrief(
         question=normalized,
         topic=topic,
@@ -414,6 +428,10 @@ def create_brief(
         validation_context=validation_context,
         web_context=web_context,
         subsystem_plan=plan.to_dict(),
+        query_language=detected_lang,
+        response_language=resp_lang,
+        dialect=detected_dialect,
+        code_switching=cs_meta,
     )
     logger.info(
         "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d, research_evidence=%d, web_results=%d, validated_claims=%d]",

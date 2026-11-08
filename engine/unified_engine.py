@@ -9,9 +9,6 @@ Orchestrates all Layer 1 subsystems:
 - Human-in-the-Loop Governance & Publishing Pipeline
 """
 
-from dataclasses import asdict
-from datetime import datetime, timezone
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -31,7 +28,6 @@ from engine.reasoning import ReasoningAnalysis, ReasoningEngine
 from engine.research import ResearchManager
 from engine.search import (
     MockSearchProvider,
-    OpenAIWebSearchProvider,
     SearchManager,
     SearchProvider,
 )
@@ -69,20 +65,32 @@ class UnifiedEngine:
         self.kb = KnowledgeBase(self.db_path)
         self.research_mgr = ResearchManager(self.db_path)
 
-        # Fallback to Mock if OpenAI credentials are not configured
+        # Provider selection based on environment configuration
         import os
         if llm_provider is not None:
             self.llm_provider = llm_provider
         else:
-            api_key = os.getenv("OPENAI_API_KEY", "").strip()
-            if api_key:
+            provider_choice = os.getenv("ANTARA_LLM_PROVIDER", "mock").lower().strip()
+            if provider_choice == "ollama":
+                try:
+                    from engine.ollama_provider import OllamaProvider
+                    self.llm_provider = OllamaProvider()
+                except Exception as exc:
+                    logger.error("Failed to initialize OllamaProvider: %s", exc)
+                    raise
+            elif provider_choice == "openai":
+                api_key = os.getenv("OPENAI_API_KEY", "").strip()
+                if not api_key:
+                    from engine.llm_provider import LLMConfigError
+                    raise LLMConfigError("OPENAI_API_KEY required for OpenAI provider but not set.")
                 try:
                     self.llm_provider = OpenAIProvider(api_key=api_key)
-                except Exception:
-                    logger.info("OpenAIProvider initialization failed; using MockLLMProvider.")
-                    self.llm_provider = MockLLMProvider()
+                except Exception as exc:
+                    logger.error("OpenAIProvider initialization failed: %s", exc)
+                    raise
             else:
-                logger.info("OPENAI_API_KEY not configured; using MockLLMProvider.")
+                # Default to Mock provider for offline or testing scenarios
+                logger.info("Using MockLLMProvider as LLM provider.")
                 self.llm_provider = MockLLMProvider()
 
         self.search_provider = search_provider or MockSearchProvider()

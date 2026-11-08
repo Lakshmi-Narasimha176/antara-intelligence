@@ -20,13 +20,12 @@ import hashlib
 import json
 import logging
 from pathlib import Path
-import re
 import sqlite3
 from typing import Any, Generator
 
 from engine.knowledge import DEFAULT_DB_PATH, compute_content_hash
 from engine.orchestrator import AntaraError
-from engine.research import compute_research_hash, normalize_doi
+from engine.research import normalize_doi
 
 logger = logging.getLogger("antara.fact_checker")
 
