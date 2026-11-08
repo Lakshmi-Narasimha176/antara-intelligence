@@ -1,0 +1,34 @@
+[
+  {
+    "title": "The Nature of Procrastination: A Meta-Analytic and Theoretical Review of Quintessential Self-Regulatory Failure",
+    "authors": "Piers Steel",
+    "journal": "Psychological Bulletin",
+    "year": 2007,
+    "doi": "10.1037/0033-2909.133.1.65",
+    "url": "https://doi.org/10.1037/0033-2909.133.1.65",
+    "abstract": "Procrastination is a prevalent and pernicious form of self-regulatory failure that is not entirely understood. This meta-analysis of correlates of procrastination synthesizes empirical evidence, concluding that task delay is strongly predicted by task aversiveness, delay, low self-efficacy, and high impulsiveness.",
+    "methodology": "Meta-analysis synthesizing 691 correlations across 212 independent samples.",
+    "study_population": "Undergraduate students and working adult samples.",
+    "sample_size": 40000,
+    "limitations": "Primarily correlational and cross-sectional designs; reliance on self-report delay inventories.",
+    "rights_note": "Scholarly citation and synthesis under fair dealing guidelines.",
+    "evidence_claims": [
+      {
+        "topic": "Temporal Motivation Theory and Task Delay",
+        "finding": "Meta-analytic correlation of r = 0.41 between impulsiveness and procrastination across 24 independent studies.",
+        "claim": "Procrastination correlates strongly with impulsiveness, showing self-regulatory failure is heavily driven by immediate temptation discounting.",
+        "classification": "supporting",
+        "strength": "high",
+        "notes": "Table 3 in published meta-analysis; aggregated across 24 independent studies."
+      },
+      {
+        "topic": "Perfectionism as Primary Cause of Delay",
+        "finding": "Multivariate correlation of r = -0.03 to 0.04 between perfectionism dimensions and procrastination.",
+        "claim": "Perfectionism displays near-zero or weakly negative correlations with procrastination, contrary to widespread clinical assertions.",
+        "classification": "contradicting",
+        "strength": "moderate",
+        "notes": "Multivariate analysis distinguishing neurotic perfectionism from conscientiousness."
+      }
+    ]
+  }
+]

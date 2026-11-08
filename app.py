@@ -77,6 +77,25 @@ def main() -> None:
     elif brief.knowledge_context.get("retrieval_indicated"):
         print(f"\nKnowledge Retrieval: {brief.knowledge_context.get('reason')}")
 
+    r_ctx = brief.research_context
+    if r_ctx and r_ctx.get("total_evidence", 0) > 0:
+        print("\nModern Scientific & Academic Evidence:")
+        by_class = r_ctx.get("evidence_by_classification", {})
+        for cat in ("supporting", "contradicting", "contextual", "inconclusive"):
+            items = by_class.get(cat, [])
+            if items:
+                print(f"  [{cat.upper()}] ({len(items)} finding(s)):")
+                for item in items:
+                    print(f"    - Claim: {item['claim']}")
+                    print(f"      Finding: {item['finding']}")
+                    if item.get("source"):
+                        src = item["source"]
+                        print(f"      Source: {src.get('title')} ({src.get('authors')}, {src.get('year')})")
+        if r_ctx.get("evidence_gaps"):
+            print("  [EVIDENCE GAPS & LIMITATIONS]:")
+            for gap in r_ctx["evidence_gaps"]:
+                print(f"    * {gap}")
+
     print(f"\nSaved brief to: {output_path}")
 
 

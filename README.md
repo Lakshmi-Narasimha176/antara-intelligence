@@ -91,6 +91,12 @@ The codebase adheres to the following production engineering standards:
 - **CLI Presentation:** `app.py` - Displays verified primary sources and source provenance directly alongside the research brief.
 - **Unit Tests:** `tests/test_retrieval.py` - 14 unit tests covering verified retrieval, unreviewed/rejected/tampered record exclusion, provenance preservation, empty search results, non-philosophical query routing, missing database resilience, and backward compatibility.
 
+### Module 3: Research Intelligence (Academic & Empirical Evidence)
+- **Engine Core:** `engine/research.py` - Provider-independent research retrieval layer, normalized DOI deduplication, quad-category evidence classification (`supporting`, `contradicting`, `contextual`, `inconclusive`), SHA-256 cryptographic fingerprinting, and substantive human review workflow.
+- **CLI Interface:** `engine/research_cli.py` - Command-line tools for initializing research tables, querying sources and claims, adding/classifying evidence, recording human verification decisions (`approved`/`rejected`), viewing append-only audit histories, and batch JSON imports.
+- **Unit Tests:** `tests/test_research.py` - 16 unit tests covering source insertion, DOI/metadata deduplication, evidence classification, provider timeout/resilience handling, substantive human review requirements, audit logging, and Module 1/2 integration.
+- **Database Tables:** `research_sources`, `research_evidence`, `research_audit` in `data/antara_knowledge.db`.
+
 ---
 
 ## 4. Module 2: Knowledge Intelligence CLI & Workflow
@@ -196,13 +202,81 @@ python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about ac
 # 2. Run with an ordinary non-philosophical inquiry (retrieval safely bypassed)
 python app.py "Why do people procrastinate even when they know what matters?"
 
-# 3. Run the full 43-test suite covering all modules & the retrieval bridge
+# 3. Run the full 59-test suite covering all modules & the retrieval bridge
 python -m unittest discover -s tests -v
 ```
 
 ---
 
-## 6. Controlled JSON Import Schema
+## 6. Module 3: Research Intelligence CLI & Workflow
+
+### Overview & Philosophy
+Module 3 establishes a rigorous research intelligence layer for academic and empirical studies across psychology, neuroscience, cognitive science, and philosophy:
+- **Zero Fabrication:** No papers, authors, DOIs, URLs, or empirical findings may be invented.
+- **Provider Independence:** Pluggable `ResearchProvider` abstract base class supporting diverse providers (`MockResearchProvider` used offline, with adapters for CrossRef, Semantic Scholar, OpenAlex, etc.).
+- **Evidence Quad-Classification:** Every empirical finding or claim is explicitly mapped to the core inquiry:
+  - `supporting`: Corroborates the hypothesis or inquiry.
+  - `contradicting`: Challenges or refutes the hypothesis.
+  - `contextual`: Provides relevant background, methodology, or situational nuances.
+  - `inconclusive`: Preliminary, underpowered, or mixed findings.
+- **Deduplication:** Automatic collision detection via normalized DOI and composite key `(normalized_title, first_author, publication_year)`.
+- **Substantive Human Review:** Every imported research study and claim begins in `unreviewed` state. Promotion to `approved` or transition to `rejected` strictly requires a named reviewer and a substantive rationale ($\ge 15$ characters).
+
+### SQLite Research Tables
+Within `data/antara_knowledge.db`:
+- `research_sources`: Stores bibliographic metadata (DOI, title, authors, journal, year, URL, abstract, methodology, sample size, limitations, verification status, SHA-256 hash).
+- `research_evidence`: Normalizes specific empirical findings, associated variables, effect sizes, statistical significance, and quad-classification against research topics.
+- `research_audit`: Append-only audit trail capturing every review decision, reviewer identity, timestamp, and rationale.
+
+### PowerShell Command Examples
+
+```powershell
+# 1. Initialize the research database tables
+python -m engine.research_cli init-db
+
+# 2. Search research sources by keyword
+python -m engine.research_cli search-sources --query "temporal motivation"
+
+# 3. Inspect a research source by ID with methodology & limitations
+python -m engine.research_cli get-source --source-id 1
+
+# 4. Search and view classified evidence findings
+python -m engine.research_cli search-evidence --classification supporting
+
+# 5. Classify a new empirical claim under a research source
+python -m engine.research_cli classify `
+  --source-id 1 `
+  --topic "Temporal Motivation Theory and Task Delay" `
+  --claim "Procrastination correlates strongly with impulsiveness and task delay discounting (r = 0.41)." `
+  --classification supporting `
+  --strength strong `
+  --effect-size "r = 0.41" `
+  --significance "p < .001"
+
+# 6. Human review and approval of a research source
+python -m engine.research_cli review-source `
+  --source-id 1 `
+  --decision approved `
+  --reviewer "Dr. E. Vance, Cognitive Psychology" `
+  --notes "Meta-analysis methodology verified against PRISMA guidelines; sample size N=212 exceeds power requirements."
+
+# 7. Human review and approval of an evidence claim
+python -m engine.research_cli review-evidence `
+  --evidence-id 1 `
+  --decision approved `
+  --reviewer "Dr. E. Vance, Cognitive Psychology" `
+  --notes "Statistical effect size verified from Table 3 in published Psychological Bulletin paper."
+
+# 8. View append-only audit trail for research records
+python -m engine.research_cli audit --target-type source --target-id 1
+
+# 9. Import research sources from a UTF-8 JSON file
+python -m engine.research_cli import --file examples/sample_research.json
+```
+
+---
+
+## 7. Controlled JSON Import Schema
 
 The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two formats:
 
@@ -241,7 +315,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 7. Mechanical vs. Human Verification
+## 8. Mechanical vs. Human Verification
 
 | Dimension | Mechanical Verification (Application Level) | Human Verification (Scholarly & Domain Level) |
 | :--- | :--- | :--- |
@@ -252,10 +326,9 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 8. Next Implementation Modules
+## 9. Next Implementation Modules
 
-1. **Research & Evidence Retrieval:** Structured external evidence gathering distinguishing empirical facts from hypotheses.
-2. **Verification & Fact-Checking Engine:** Strict citation cross-referencing ensuring no AI hallucinations or fabricated claims.
-3. **HITL Governance & Publishing Pipeline:** Cryptographic sign-off and publication approval state machine.
+1. **Module 4: AI Reasoning Engine & Hypothesis Generation:** Synthesis of verified primary knowledge and empirical research evidence into structured, verifiable insights with uncertainty estimation.
+2. **Module 5: HITL Governance & Publishing Pipeline:** Multi-stage human approval workflow, cryptographic sign-off, and verified publication generation.
 
 

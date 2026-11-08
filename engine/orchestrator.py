@@ -46,6 +46,7 @@ class IntelligenceBrief:
         human_review_required: Flag enforcing mandatory human supervision.
         created_at_utc: ISO 8601 UTC timestamp of brief creation.
         knowledge_context: Verified primary source knowledge attached via retrieval bridge.
+        research_context: Modern scientific & empirical research evidence attached via Module 3.
     """
 
     question: str
@@ -56,6 +57,7 @@ class IntelligenceBrief:
     human_review_required: bool
     created_at_utc: str
     knowledge_context: dict[str, Any] = field(default_factory=dict)
+    research_context: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert intelligence brief to a JSON-serializable dictionary."""
@@ -123,16 +125,20 @@ def create_brief(
     question: str,
     kb: Any = None,
     attach_knowledge: bool = True,
+    research_mgr: Any = None,
+    attach_research: bool = True,
 ) -> IntelligenceBrief:
     """Create a structured, human-supervised intelligence brief from a question.
 
-    Integrates with Module 2 Knowledge Retrieval Bridge to attach verified primary
-    source knowledge when philosophical or Bhagavad Gītā inquiry is indicated.
+    Integrates with Module 2 Knowledge Retrieval Bridge and Module 3 Research
+    Intelligence to attach verified primary source knowledge and modern empirical evidence.
 
     Args:
         question: Raw question submitted by user or client.
         kb: Optional KnowledgeBase instance to use for retrieval.
         attach_knowledge: Whether to query KnowledgeBase for verified knowledge.
+        research_mgr: Optional ResearchManager instance for empirical research.
+        attach_research: Whether to query ResearchManager for empirical evidence.
 
     Returns:
         Populated IntelligenceBrief instance with human_review_required=True.
@@ -157,6 +163,31 @@ def create_brief(
                 "records": [],
             }
 
+    research_context: dict[str, Any] = {}
+    if attach_research:
+        try:
+            from engine.research import ResearchManager
+            mgr = research_mgr if research_mgr is not None else ResearchManager()
+            r_ctx = mgr.collect_research_for_question(normalized, topic=topic)
+            research_context = r_ctx.to_dict()
+        except Exception as exc:
+            logger.debug("Research collection skipped or unavailable: %s", exc)
+            research_context = {
+                "query": normalized,
+                "status": "unavailable",
+                "reason": f"Research intelligence unavailable: {exc}",
+                "total_sources": 0,
+                "total_evidence": 0,
+                "sources": [],
+                "evidence_by_classification": {
+                    "supporting": [],
+                    "contradicting": [],
+                    "contextual": [],
+                    "inconclusive": [],
+                },
+                "evidence_gaps": [],
+            }
+
     brief = IntelligenceBrief(
         question=normalized,
         topic=topic,
@@ -166,12 +197,14 @@ def create_brief(
         human_review_required=True,
         created_at_utc=datetime.now(timezone.utc).isoformat(),
         knowledge_context=knowledge_context,
+        research_context=research_context,
     )
     logger.info(
-        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d]",
+        "Created intelligence brief [topic=%s, human_review_required=%s, knowledge_records=%d, research_evidence=%d]",
         brief.topic,
         brief.human_review_required,
         len(knowledge_context.get("records", [])),
+        research_context.get("total_evidence", 0),
     )
     return brief
 
