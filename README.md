@@ -110,6 +110,12 @@ The codebase adheres to the following production engineering standards:
 - **Unit Tests:** `tests/test_reasoning.py` - 14 unit tests covering provider abstraction, client-injected response normalization, error translation, timeout/retry/refusal handling, context filtering, lifecycle state transitions, and Module 4 validation gating.
 - **Database Tables:** `reasoning_reports`, `reasoning_audit` in `data/antara_knowledge.db`.
 
+### Module 5: Human-in-the-Loop (HITL) Governance & Publishing Pipeline
+- **Engine Core:** `engine/governance.py` - Manages a strict 9-state report lifecycle (`generated`, `validation_failed`, `pending_review`, `approved`, `rejected`, `revision_requested`, `ready_to_publish`, `published`, `archived`), version snapshots, append-only audit trail, SHA-256 fingerprint matching, tamper invalidation, and pluggable publishing providers (`PublishingProvider`, `LocalFilePublisher`, `MockPublishingProvider`).
+- **CLI Interface:** `engine/governance_cli.py` - Command-line tools for report lifecycle management (`status`, `review`, `authorize`, `publish`, `export`, and `audit`).
+- **Unit Tests:** `tests/test_governance.py` - 14 unit tests covering the full lifecycle progression, invalid state transition rejections, unvalidated approval blocking, substantive notes enforcement, post-approval tamper detection, fingerprint mismatch guards, duplicate publication prevention, immutable audit history, and multi-format exports.
+- **Database Tables:** `governance_records`, `governance_versions`, `governance_audit`, `governance_publications` in `data/antara_knowledge.db`.
+
 ---
 
 ## 4. Module 2: Knowledge Intelligence CLI & Workflow
@@ -215,7 +221,7 @@ python app.py "What does the Bhagavad Gita teach in Chapter 2, Verse 47 about ac
 # 2. Run with an ordinary non-philosophical inquiry (retrieval safely bypassed)
 python app.py "Why do people procrastinate even when they know what matters?"
 
-# 3. Run the full 90-test suite covering all modules & the retrieval bridge
+# 3. Run the full 104-test suite covering all modules & the retrieval bridge
 python -m unittest discover -s tests -v
 ```
 
@@ -494,7 +500,119 @@ python -m engine.reasoning_cli synthesize "What does the Bhagavad Gita teach in 
 
 ---
 
-## 9. Controlled JSON Import Schema
+## 9. Module 5: HITL Governance & Publishing Pipeline CLI & Workflow
+
+### Overview & Philosophy
+Module 5 implements a secure, auditable, human-controlled governance system managing AI-generated reports and syntheses from generation through review, authorization, and publication.
+
+> **Absolute Safeguard:**
+> No AI-generated content can ever be published automatically or without explicit human authorization. The system mechanically rejects any attempt to publish unapproved, unreviewed, or tampered material.
+
+```
+[Generated Synthesis]
+        │
+        ▼
+[Module 4 Fact-Check Gate]
+  ├── Failed Validation ──► [validation_failed] (Approval Strictly Blocked)
+  └── Passed Validation ──► [pending_review]
+                                   │
+                                   ▼
+                       [Human Review Workflow]
+                         ├── Reject ──────────► [rejected]
+                         ├── Request Revision ─► [revision_requested]
+                         └── Approve ─────────► [approved]
+                                                   │
+                                                   ▼
+                                     [Human Publish Authorization]
+                                       ├── SHA-256 Hash Verification
+                                       ├── Explicit Authorizer & Channel
+                                       └── Transitions to [ready_to_publish]
+                                                   │
+                                                   ▼
+                                         [Publishing Pipeline]
+                                           ├── LocalFilePublisher (JSON + Markdown)
+                                           └── Transitions to [published]
+                                                   │
+                                                   ▼
+                                              [archived]
+```
+
+### Report Lifecycle State Machine
+
+The Governance Engine enforces 9 mutually exclusive lifecycle states with strict transition constraints:
+
+| State | Permitted Transitions | Guard Invariants |
+| :--- | :--- | :--- |
+| `generated` | `validation_failed`, `pending_review` | Automatically evaluated against Module 4 validation. |
+| `validation_failed` | `archived` | Cannot be approved or published; requires complete regeneration. |
+| `pending_review` | `approved`, `rejected`, `revision_requested`, `archived` | Requires named human reviewer and substantive notes ($\ge 20$ chars). |
+| `approved` | `ready_to_publish`, `revision_requested`, `archived` | SHA-256 fingerprint frozen at approval time (`approved_hash`). |
+| `rejected` | `archived` | Terminal review outcome. |
+| `revision_requested` | `pending_review`, `archived` | Increments version snapshot; resets approval state. |
+| `ready_to_publish` | `published`, `archived` | Requires explicit authorizer identity and channel authorization. |
+| `published` | `archived` | Tamper-proof export to filesystem or provider. Duplicate publication blocked. |
+| `archived` | *(None - Terminal)* | Preserved for historical and audit reference. |
+
+### Supported Content Types
+The pipeline manages 6 distinct content formats:
+1. `philosophical_analysis`: In-depth scriptural and philosophical exegesis.
+2. `scientific_research_comparison`: Comparative cross-epistemic research evaluations.
+3. `gita_based_insights`: Verse-grounded practical wisdom and ethics.
+4. `educational_article`: Long-form explanatory essays for broader audiences.
+5. `social_media_draft`: Bounded, citation-annotated short-form synthesis.
+6. `long_form_report`: Exhaustive multi-disciplinary intelligence monographs.
+
+### Publishing Safeguards & Defense-in-Depth
+- **Cryptographic Fingerprint Validation:** Every report content payload has its canonical SHA-256 hash computed (`compute_governance_hash`).
+- **Post-Approval Tamper Invalidation:** If database content is altered after human approval, `current_hash != approved_hash`, and publishing is immediately blocked with `FingerprintMismatchError`.
+- **Duplicate Publication Guard:** The publisher tracks published versions per channel; attempting to publish the same version twice raises `DuplicatePublicationError`.
+- **Append-Only Audit History:** Every review, revision, authorization, and publication step writes an immutable audit record to `governance_audit`.
+
+### Multi-Channel Publishing Architecture
+- **`PublishingProvider` (ABC):** Extensible base class for all publication destinations.
+- **`LocalFilePublisher`:** Generates verified publication artifacts:
+  - **JSON Export:** Full machine-readable envelope with metadata, hashes, versions, citations, and provenance.
+  - **Publication-Grade Markdown:** Clean, publication-ready Markdown article complete with title, summary, Gita teachings, empirical science, comparative synthesis, and full bibliographic citations.
+- **`MockPublishingProvider`:** Deterministic in-memory provider for zero-network testing.
+
+### PowerShell Command Examples
+
+```powershell
+# 1. Inspect the governance lifecycle status and hashes of a report
+python -m engine.governance_cli status --report-id "reason_20261108_052517_bae379e8"
+
+# 2. Record substantive human review and approval
+python -m engine.governance_cli review `
+  --report-id "reason_20261108_052517_bae379e8" `
+  --decision approved `
+  --reviewer "Dr. S. Radhakrishnan" `
+  --notes "Scholarly review confirms Niṣkāma Karma synthesis and valid comparative methodology."
+
+# 3. Explicitly authorize a report for publication
+python -m engine.governance_cli authorize `
+  --report-id "reason_20261108_052517_bae379e8" `
+  --authorizer "Editorial Board Director" `
+  --channel "local_file" `
+  --notes "Authorized for primary research publication and archive generation."
+
+# 4. Publish the authorized report through the local file publisher
+python -m engine.governance_cli publish `
+  --report-id "reason_20261108_052517_bae379e8" `
+  --channel "local_file"
+
+# 5. Export published report to both JSON and publication-grade Markdown
+python -m engine.governance_cli export `
+  --report-id "reason_20261108_052517_bae379e8" `
+  --format both `
+  --output-dir outputs/publications
+
+# 6. View the complete append-only audit trail for a governance record
+python -m engine.governance_cli audit --report-id "reason_20261108_052517_bae379e8"
+```
+
+---
+
+## 10. Controlled JSON Import Schema
 
 The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two formats:
 
@@ -533,7 +651,7 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 10. Mechanical vs. Human Verification
+## 11. Mechanical vs. Human Verification
 
 | Dimension | Mechanical Verification (Application Level) | Human Verification (Scholarly & Domain Level) |
 | :--- | :--- | :--- |
@@ -544,8 +662,9 @@ The importer in `engine/knowledge.py` accepts UTF-8 JSON files in either of two 
 
 ---
 
-## 11. Next Implementation Modules
+## 12. Next Implementation Modules
 
-1. **Module 5: HITL Governance & Publishing Pipeline:** Multi-stage human approval state machine, cryptographic publication sign-off, and verified publication generation.
+1. **Multi-Channel Social & Web Distribution Plugins:** Substack, Medium, X/Twitter, and WordPress publisher adapters built on `PublishingProvider`.
+2. **Production Monitoring & Observability Dashboards:** Real-time metrics for claim verification, audit trails, and human review SLAs.
 
 
