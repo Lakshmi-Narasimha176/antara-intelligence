@@ -69,7 +69,22 @@ All unit and integration tests (except opt-in live smoke tests) use `MockLLMProv
 
 ---
 
-## 4. Optional External Providers (OpenAI)
+## 4. Configuration Versioning and Migration
+
+Layer 1 configuration is currently supplied through stable environment-variable names
+documented above and in `.env.example`. The application does not load a versioned
+configuration file or persist provider settings in a versioned schema. Consequently,
+there is no old-to-new configuration document or stored configuration state to migrate;
+configuration migration is **NOT APPLICABLE** to this release.
+
+Existing environment variables remain the compatibility surface. If a future release
+introduces a persisted configuration format, it must add an explicit schema version and
+an offline, tested migration before changing that format. This does not introduce a
+migration mechanism into Layer 1.
+
+---
+
+## 5. Optional External Providers (OpenAI)
 
 External providers are **strictly optional** and must be explicitly configured:
 1. Set the provider choice:
@@ -84,7 +99,7 @@ If `OPENAI_API_KEY` is missing when `ANTARA_LLM_PROVIDER=openai`, an explicit `L
 
 ---
 
-## 5. Live Internet Search Configuration
+## 6. Live Internet Search Configuration
 
 Web search is separate from model inference:
 - By default, `UnifiedEngine` uses `MockSearchProvider` for offline safety.

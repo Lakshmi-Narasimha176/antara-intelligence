@@ -714,10 +714,16 @@ class GovernanceEngine:
 
         with self.connection() as conn:
             with conn:
-                conn.execute(
-                    f"UPDATE governance_records SET {set_clause} WHERE id = ?;",
-                    params,
+                cursor = conn.execute(
+                    f"UPDATE governance_records SET {set_clause} "
+                    "WHERE id = ? AND current_state = ?;",
+                    [*params, from_state],
                 )
+                if cursor.rowcount != 1:
+                    raise GovernanceTransitionError(
+                        f"Report '{record.report_id}' changed state from '{from_state}' "
+                        f"before '{action}' could be recorded."
+                    )
                 conn.execute(
                     """
                     INSERT INTO governance_audit (
@@ -889,6 +895,24 @@ class GovernanceEngine:
 
         return self.get_record(report_id)
 
+    def _verify_approved_version(
+        self,
+        record: GovernanceRecord,
+        version: GovernanceVersion,
+    ) -> None:
+        """Require the approval fingerprint to match the exact stored version content."""
+        actual_hash = compute_governance_hash(version.content)
+        if not (
+            record.current_hash
+            == record.approved_hash
+            == version.content_hash
+            == actual_hash
+        ):
+            raise FingerprintMismatchError(
+                "Approved content fingerprint does not match the current record and exact stored version. "
+                "Re-approval is required."
+            )
+
     def authorize_publication(
         self,
         report_id: str,
@@ -913,13 +937,10 @@ class GovernanceEngine:
         if not target_channels:
             raise GovernanceValidationError("At least one target publication channel must be specified.")
 
-        # Fingerprint Integrity Guard
-        if record.current_hash != record.approved_hash:
-            raise FingerprintMismatchError(
-                f"Content fingerprint mismatch! Current hash '{record.current_hash[:16]}...' "
-                f"does not match approved hash '{str(record.approved_hash)[:16]}...'. "
-                "Content was modified after approval. Re-approval is required."
-            )
+        self._verify_approved_version(
+            record,
+            self.get_version(report_id, record.current_version),
+        )
 
         extra = {
             "publication_channels": json.dumps(target_channels),
@@ -953,16 +974,10 @@ class GovernanceEngine:
                 f"Report must be explicitly authorized and in state '{STATE_READY_TO_PUBLISH}'."
             )
 
-        # Fingerprint Integrity Guard
-        if record.current_hash != record.approved_hash:
-            raise FingerprintMismatchError(
-                f"Cryptographic fingerprint check failed at publication gate! "
-                f"Current '{record.current_hash[:16]}...' != Approved '{str(record.approved_hash)[:16]}...'. "
-                "Publishing aborted."
-            )
+        version_data = self.get_version(report_id, record.current_version)
+        self._verify_approved_version(record, version_data)
 
         pub_provider = publisher if publisher is not None else LocalFilePublisher()
-        version_data = self.get_version(report_id, record.current_version)
 
         # Build Publication Package
         package = PublicationPackage(

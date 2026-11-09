@@ -14,6 +14,7 @@ from typing import Any
 
 from engine.orchestrator import IntelligenceBrief
 from engine.reasoning import ReasoningAnalysis
+from engine.search import classify_source_freshness
 
 logger = logging.getLogger("antara.unified_response")
 
@@ -157,8 +158,13 @@ def build_unified_response(
 
     # 4. Current developments (Real-Time Web Intelligence)
     web_citations: list[dict[str, Any]] = []
+    current_sources: list[dict[str, Any]] = []
     web_results = brief.web_context.get("results", [])
     for w in web_results:
+        freshness_status, freshness_disclosure = classify_source_freshness(
+            w.get("published_date"),
+            w.get("retrieved_at_utc"),
+        )
         web_citations.append({
             "source_type": "web",
             "source_id": w.get("url"),
@@ -170,6 +176,19 @@ def build_unified_response(
             "retrieval_timestamp_utc": w.get("retrieved_at_utc"),
             "content_hash": w.get("content_hash"),
             "credibility_tier": w.get("credibility_tier", "general"),
+            "freshness_status": freshness_status,
+            "freshness_disclosure": freshness_disclosure,
+        })
+        current_sources.append({
+            "title": w.get("title"),
+            "url": w.get("url"),
+            "domain": w.get("source_domain"),
+            "credibility_tier": w.get("credibility_tier"),
+            "published_date": w.get("published_date"),
+            "retrieved_at_utc": w.get("retrieved_at_utc"),
+            "snippet": w.get("snippet"),
+            "freshness_status": freshness_status,
+            "freshness_disclosure": freshness_disclosure,
         })
 
     current_developments = {
@@ -177,18 +196,7 @@ def build_unified_response(
         "provider": brief.web_context.get("provider", "none"),
         "total_results": brief.web_context.get("total_results", 0),
         "disclosure_note": brief.web_context.get("disclosure_note", ""),
-        "sources": [
-            {
-                "title": w.get("title"),
-                "url": w.get("url"),
-                "domain": w.get("source_domain"),
-                "credibility_tier": w.get("credibility_tier"),
-                "published_date": w.get("published_date"),
-                "retrieved_at_utc": w.get("retrieved_at_utc"),
-                "snippet": w.get("snippet"),
-            }
-            for w in web_results
-        ],
+        "sources": current_sources,
         "conflicts_detected": brief.web_context.get("conflicts_detected", []),
         "citations": web_citations,
     }

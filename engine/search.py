@@ -8,7 +8,7 @@ robots.txt compliance, and strict prompt injection defenses.
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import ipaddress
 import json
@@ -30,6 +30,7 @@ DEFAULT_REQUEST_TIMEOUT: float = 8.0  # seconds
 DEFAULT_USER_AGENT: str = (
     "ANTARA-Intelligence-Engine/1.0 (+https://github.com/Lakshmi-Narasimha176/antara-intelligence; research bot)"
 )
+STALE_SOURCE_MAX_AGE_DAYS = 365
 
 # Credibility Tier Domains
 OFFICIAL_DOMAINS = frozenset({
@@ -156,6 +157,36 @@ def compute_search_hash(title: str, url: str, snippet: str) -> str:
     """Compute deterministic SHA-256 fingerprint for a search result."""
     payload = f"{title.strip().casefold()}|{url.strip().casefold()}|{snippet.strip().casefold()}"
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def classify_source_freshness(
+    published_date: Any,
+    retrieved_at_utc: Any,
+) -> tuple[str, str]:
+    """Classify source recency without treating missing or malformed dates as current."""
+    if not isinstance(published_date, str) or not published_date.strip():
+        return "unknown", "Publication date is unavailable; recency is unverified."
+
+    try:
+        published = date.fromisoformat(published_date.strip()[:10])
+        retrieved = datetime.fromisoformat(
+            str(retrieved_at_utc).replace("Z", "+00:00")
+        ).date()
+    except (TypeError, ValueError):
+        return "unknown", "Publication or retrieval date is invalid; recency is unverified."
+
+    age_days = (retrieved - published).days
+    if age_days < 0:
+        return "unknown", "Publication date is later than retrieval; recency is unverified."
+    if age_days > STALE_SOURCE_MAX_AGE_DAYS:
+        return (
+            "stale",
+            f"Published {age_days} days before retrieval; treat as historical, not current.",
+        )
+    return (
+        "recent",
+        f"Published {age_days} days before retrieval; recency does not establish current validity.",
+    )
 
 
 def normalize_url(raw_url: str) -> str:

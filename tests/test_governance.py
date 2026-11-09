@@ -20,6 +20,10 @@ Comprehensive offline test coverage for:
 """
 
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+import json
+from threading import Barrier
 import tempfile
 import unittest
 
@@ -37,6 +41,7 @@ from engine.governance import (
     FingerprintMismatchError,
     GovernanceEngine,
     GovernanceError,
+    GovernanceRecord,
     GovernanceTransitionError,
     LocalFilePublisher,
     MockPublishingProvider,
@@ -357,6 +362,97 @@ class FingerprintAndPublishingSafeguardsTests(GovernanceTestCase):
         with self.assertRaises(FingerprintMismatchError):
             self.engine.publish(report_id=rec.report_id)
 
+    def test_exact_approved_content_fingerprint_gates_publication(self) -> None:
+        """Only the exact approved version may be authorized or published."""
+        rec = self.engine.register_report(self.sample_analysis)
+        approved = self.engine.review(
+            report_id=rec.report_id,
+            action="approve",
+            reviewer="Reviewer A",
+            notes="Substantive approval after exact content review.",
+        )
+        version = self.engine.get_version(rec.report_id, approved.current_version)
+        expected_hash = compute_governance_hash(version.content)
+        self.assertEqual(approved.approved_hash, expected_hash)
+        self.assertEqual(version.content_hash, expected_hash)
+
+        authorized = self.engine.authorize_publication(
+            report_id=rec.report_id,
+            authorizer="Publishing Director",
+            target_channels=["exact-content-test"],
+            notes="Authorize the exact fingerprinted report for publication.",
+        )
+        self.assertEqual(authorized.current_state, STATE_READY_TO_PUBLISH)
+        receipt = self.engine.publish(
+            rec.report_id,
+            publisher=MockPublishingProvider(),
+        )[0]
+        self.assertEqual(receipt.content_hash, expected_hash)
+
+        altered_analysis = replace(self.sample_analysis, report_id="test_report_altered")
+        altered_record = self.engine.register_report(altered_analysis)
+        altered_approval = self.engine.review(
+            report_id=altered_record.report_id,
+            action="approve",
+            reviewer="Reviewer B",
+            notes="Substantive approval before tamper simulation.",
+        )
+        altered_version = self.engine.get_version(
+            altered_record.report_id,
+            altered_approval.current_version,
+        )
+        altered_content = dict(altered_version.content)
+        altered_content["executive_summary"] = "Content changed after approval."
+        with self.engine.connection() as conn:
+            conn.execute(
+                "UPDATE governance_versions SET content_json = ? WHERE report_id = ? AND version = ?;",
+                (
+                    json.dumps(altered_content, ensure_ascii=False),
+                    altered_record.report_id,
+                    altered_approval.current_version,
+                ),
+            )
+            conn.commit()
+
+        with self.assertRaises(FingerprintMismatchError):
+            self.engine.authorize_publication(
+                report_id=altered_record.report_id,
+                authorizer="Publishing Director",
+                target_channels=["exact-content-test"],
+                notes="Attempt authorization after exact-content tampering.",
+            )
+
+    def test_stored_content_tampering_after_authorization_blocks_publish(self) -> None:
+        rec = self.engine.register_report(self.sample_analysis)
+        approved = self.engine.review(
+            report_id=rec.report_id,
+            action="approve",
+            reviewer="Reviewer A",
+            notes="Substantive exact-content approval.",
+        )
+        self.engine.authorize_publication(
+            report_id=rec.report_id,
+            authorizer="Publishing Director",
+            target_channels=["exact-content-test"],
+            notes="Authorize publication after fingerprint verification.",
+        )
+        version = self.engine.get_version(rec.report_id, approved.current_version)
+        altered_content = dict(version.content)
+        altered_content["executive_summary"] = "Changed after publication authorization."
+        with self.engine.connection() as conn:
+            conn.execute(
+                "UPDATE governance_versions SET content_json = ? WHERE report_id = ? AND version = ?;",
+                (
+                    json.dumps(altered_content, ensure_ascii=False),
+                    rec.report_id,
+                    approved.current_version,
+                ),
+            )
+            conn.commit()
+
+        with self.assertRaises(FingerprintMismatchError):
+            self.engine.publish(rec.report_id, publisher=MockPublishingProvider())
+
     def test_publishing_without_approval_is_blocked(self) -> None:
         """Requirement 8: Publishing unapproved reports raises UnauthorizedPublishingError."""
         rec = self.engine.register_report(self.sample_analysis)
@@ -534,3 +630,52 @@ class VersioningAuditAndExportTests(GovernanceTestCase):
         self.assertEqual(len(receipts), 1)
         self.assertTrue(Path(receipts[0].published_uri_or_path).exists())
         self.assertEqual(self.engine.get_record(gov_rec.report_id).current_state, STATE_PUBLISHED)
+
+
+class ConcurrentGovernanceTests(GovernanceTestCase):
+    """Verify competing simultaneous lifecycle requests cannot corrupt shared state."""
+
+    def test_concurrent_authorization_allows_only_one_transition(self) -> None:
+        rec = self.engine.register_report(self.sample_analysis)
+        self.engine.review(
+            report_id=rec.report_id,
+            action="approve",
+            reviewer="Reviewer A",
+            notes="Substantive approval before concurrent authorization.",
+        )
+        barrier = Barrier(2)
+
+        class SynchronizedGovernanceEngine(GovernanceEngine):
+            def get_record(self, report_id: str) -> GovernanceRecord:
+                record = super().get_record(report_id)
+                if record.current_state == STATE_APPROVED:
+                    barrier.wait(timeout=10)
+                return record
+
+        engines = [
+            SynchronizedGovernanceEngine(self.db_path),
+            SynchronizedGovernanceEngine(self.db_path),
+        ]
+
+        def authorize(engine: GovernanceEngine) -> str:
+            try:
+                engine.authorize_publication(
+                    report_id=rec.report_id,
+                    authorizer="Concurrent Authorizer",
+                    target_channels=["concurrency-test"],
+                    notes="Concurrent request for approved exact content.",
+                )
+                return "authorized"
+            except GovernanceTransitionError:
+                return "rejected"
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(authorize, engines))
+
+        self.assertCountEqual(outcomes, ["authorized", "rejected"])
+        authorization_events = [
+            item for item in self.engine.get_audit_trail(rec.report_id)
+            if item.action == "authorize_publication"
+        ]
+        self.assertEqual(len(authorization_events), 1)
+        self.assertEqual(self.engine.get_record(rec.report_id).current_state, STATE_READY_TO_PUBLISH)
